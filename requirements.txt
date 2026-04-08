@@ -1,0 +1,26 @@
+# Core Data & Math
+numpy>=1.24.0
+scipy>=1.10.0
+pandas>=2.0.0
+
+# Computer Vision
+opencv-python>=4.8.0
+# Note: pyzed (ZED Python API) is typically installed via the ZED SDK get_python_api.py script, 
+# but if you compile it into a wheel, you can reference it here later.
+
+# Deep Learning (Uncomment your preferred framework)
+# PyTorch (Recommended for CV research/Transfer Learning)
+torch>=2.1.0 --index-url https://download.pytorch.org/whl/cu121
+torchvision>=0.16.0 --index-url https://download.pytorch.org/whl/cu121
+
+# TensorFlow (Alternative)
+# tensorflow>=2.14.0
+
+# Visualization & Logging
+matplotlib>=3.7.0
+tqdm>=4.65.0
+tensorboard>=2.14.0
+
+# Utilities
+pyyaml>=6.0
+requests>=2.31.0
