@@ -1,18 +1,15 @@
 # Core Data & Math
-numpy>=1.24.0
+numpy<2.0.0
 scipy>=1.10.0
 pandas>=2.0.0
 
 # Computer Vision
-opencv-python>=4.8.0
+opencv-python<4.11.0
 
 # Deep Learning 
 # PyTorch 
 torch>=2.1.0 --extra-index-url https://download.pytorch.org/whl/cu121
 torchvision>=0.16.0 --extra-index-url https://download.pytorch.org/whl/cu121
-
-# TensorFlow (Alternative - Uncomment the line below if needed instead of PyTorch)
-# tensorflow>=2.14.0
 
 # Visualization & Logging
 matplotlib>=3.7.0
