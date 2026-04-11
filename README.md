@@ -23,4 +23,4 @@ These descriptors are then piped into Unreal Engine's Niagara particle system or
 ## Additional References:
 Loke, L., & Robertson, T. (2013). Moving and making methodologies in HCI: The Feldenkrais framework. ACM Transactions on Computer-Human Interaction (TOCHI).
 
-Stereolabs ZED SDK Documentation (Skeletal Tracking API).
+Stereolabs ZED SDK Documentation (Skeletal Tracking API)
