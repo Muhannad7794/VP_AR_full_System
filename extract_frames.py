@@ -61,7 +61,7 @@ def main():
     saved_count = 0
 
     print("Extracting frames...")
-    # We loop until either video runs out
+    # loop until either video runs out
     while True:
         # Grab ZED Frame
         err = zed.grab()
@@ -77,18 +77,18 @@ def main():
             zed.retrieve_image(zed_image, sl.VIEW.LEFT)
             zed.retrieve_measure(zed_depth, sl.MEASURE.DEPTH)
 
-            # 1. Force a deep copy to completely sever ties with the ZED C++ memory
+            # 1. Force a copy of the data to ensure it's contiguous in memory for NumPy
             raw_bgra = np.array(zed_image.get_data(), copy=True)
             raw_depth = np.array(zed_depth.get_data(), copy=True)
 
-            # 2. Pure NumPy conversion (No OpenCV!)
+            # 2. Pure NumPy conversion
             # Slice off Alpha [:, :, :3], then reverse the BGR colors to standard RGB [:, :, ::-1]
             rgb_image = raw_bgra[:, :, :3][:, :, ::-1]
 
             # 3. Clean depth data to 16-bit
             depth_16bit = np.nan_to_num(raw_depth).astype(np.uint16)
 
-            # 4. Save ZED images using Pillow instead of OpenCV
+            # 4. Save ZED images using Pillow
             Image.fromarray(rgb_image).save(
                 os.path.join(OUTPUT_ZED_RGB, f"zed_rgb_{saved_count:05d}.png")
             )
@@ -97,7 +97,6 @@ def main():
             )
 
             # --- Extract Sony Data ---
-            # OpenCV created the sony_frame, so we let OpenCV save it
             cv2.imwrite(
                 os.path.join(OUTPUT_SONY_RGB, f"sony_rgb_{saved_count:05d}.png"),
                 sony_frame,
