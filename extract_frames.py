@@ -3,6 +3,7 @@ import pyzed.sl as sl
 import cv2
 import os
 import numpy as np
+from PIL import Image
 from tqdm import tqdm
 
 
@@ -76,41 +77,27 @@ def main():
             zed.retrieve_image(zed_image, sl.VIEW.LEFT)
             zed.retrieve_measure(zed_depth, sl.MEASURE.DEPTH)
 
-            # Get the raw data from ZED
-            raw_bgra = zed_image.get_data()
-            raw_depth = zed_depth.get_data()
+            # 1. Force a deep copy to completely sever ties with the ZED C++ memory
+            raw_bgra = np.array(zed_image.get_data(), copy=True)
+            raw_depth = np.array(zed_depth.get_data(), copy=True)
 
-            # THE BLANK CANVAS TRICK (RGB)
-            # 1. Create a pure Python/NumPy blank canvas (Height, Width, 3 Colors)
-            bgr_image = np.zeros(
-                (raw_bgra.shape[0], raw_bgra.shape[1], 3), dtype=np.uint8
+            # 2. Pure NumPy conversion (No OpenCV!)
+            # Slice off Alpha [:, :, :3], then reverse the BGR colors to standard RGB [:, :, ::-1]
+            rgb_image = raw_bgra[:, :, :3][:, :, ::-1]
+
+            # 3. Clean depth data to 16-bit
+            depth_16bit = np.nan_to_num(raw_depth).astype(np.uint16)
+
+            # 4. Save ZED images using Pillow instead of OpenCV
+            Image.fromarray(rgb_image).save(
+                os.path.join(OUTPUT_ZED_RGB, f"zed_rgb_{saved_count:05d}.png")
             )
-            # 2. Copy the pixels from the ZED array into our pure Python array
-            bgr_image[:, :, :] = raw_bgra[:, :, :3]
-
-            # THE BLANK CANVAS TRICK (DEPTH)
-            # 1. Clean the NaNs and convert to 16-bit
-            clean_depth = np.nan_to_num(raw_depth).astype(np.uint16)
-            # 2. Create a pure Python blank canvas (Height, Width)
-            depth_16bit = np.zeros(
-                (raw_depth.shape[0], raw_depth.shape[1]), dtype=np.uint16
-            )
-            # 3. Copy the pixels over
-            depth_16bit[:, :] = clean_depth[:, :]
-
-            # Save ZED RGB
-            cv2.imwrite(
-                os.path.join(OUTPUT_ZED_RGB, f"zed_rgb_{saved_count:05d}.png"),
-                bgr_image,
-            )
-
-            # Save ZED Depth
-            cv2.imwrite(
-                os.path.join(OUTPUT_ZED_DEPTH, f"zed_depth_{saved_count:05d}.png"),
-                depth_16bit,
+            Image.fromarray(depth_16bit).save(
+                os.path.join(OUTPUT_ZED_DEPTH, f"zed_depth_{saved_count:05d}.png")
             )
 
             # --- Extract Sony Data ---
+            # OpenCV created the sony_frame, so we let OpenCV save it
             cv2.imwrite(
                 os.path.join(OUTPUT_SONY_RGB, f"sony_rgb_{saved_count:05d}.png"),
                 sony_frame,
