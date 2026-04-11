@@ -2,13 +2,13 @@ import sys
 import pyzed.sl as sl
 import cv2
 import os
+import numpy as np
 from tqdm import tqdm
+
 
 # --- CONFIGURATION ---
 SVO_FILE_PATH = "data/raw/svo/HD1080_SN30014451_19-53-32.svo2"
-MP4_FILE_PATH = (
-    "data/raw/mp4/your_sony_video.mp4"  # Update this to your actual file name
-)
+MP4_FILE_PATH = "data/raw/mp4/training_video.mp4"
 
 OUTPUT_ZED_DEPTH = "data/extracted/zed_depth/"
 OUTPUT_ZED_RGB = "data/extracted/zed_rgb/"
@@ -76,12 +76,27 @@ def main():
             zed.retrieve_image(zed_image, sl.VIEW.LEFT)
             zed.retrieve_measure(zed_depth, sl.MEASURE.DEPTH)
 
-            # Convert ZED data to numpy arrays
-            bgra_image = zed_image.get_data()
-            bgr_image = cv2.cvtColor(bgra_image, cv2.COLOR_BGRA2BGR)
-            depth_data = (
-                zed_depth.get_data()
-            )  # Returns a 32-bit float array in millimeters
+            # Get the raw data from ZED
+            raw_bgra = zed_image.get_data()
+            raw_depth = zed_depth.get_data()
+
+            # THE BLANK CANVAS TRICK (RGB)
+            # 1. Create a pure Python/NumPy blank canvas (Height, Width, 3 Colors)
+            bgr_image = np.zeros(
+                (raw_bgra.shape[0], raw_bgra.shape[1], 3), dtype=np.uint8
+            )
+            # 2. Copy the pixels from the ZED array into our pure Python array
+            bgr_image[:, :, :] = raw_bgra[:, :, :3]
+
+            # THE BLANK CANVAS TRICK (DEPTH)
+            # 1. Clean the NaNs and convert to 16-bit
+            clean_depth = np.nan_to_num(raw_depth).astype(np.uint16)
+            # 2. Create a pure Python blank canvas (Height, Width)
+            depth_16bit = np.zeros(
+                (raw_depth.shape[0], raw_depth.shape[1]), dtype=np.uint16
+            )
+            # 3. Copy the pixels over
+            depth_16bit[:, :] = clean_depth[:, :]
 
             # Save ZED RGB
             cv2.imwrite(
@@ -89,9 +104,7 @@ def main():
                 bgr_image,
             )
 
-            # Save ZED Depth (Convert 32-bit float to 16-bit unsigned integer for PNG saving)
-            # 1 unit = 1 millimeter. Max representable depth is 65.5 meters.
-            depth_16bit = depth_data.astype("uint16")
+            # Save ZED Depth
             cv2.imwrite(
                 os.path.join(OUTPUT_ZED_DEPTH, f"zed_depth_{saved_count:05d}.png"),
                 depth_16bit,
@@ -104,8 +117,6 @@ def main():
             )
 
             saved_count += 1
-
-        frame_index += 1
 
         if frame_index % 100 == 0:
             print(f"Processed {frame_index} frames...")
