@@ -1,10 +1,10 @@
-FROM stereolabs/zed:4.2-gl-devel-cuda12.1-ubuntu22.04
+FROM stereolabs/zed:4.2-devel-cuda12.1-ubuntu22.04
 
 # Prevent interactive prompts during apt installations
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Set the working directory in the container
-WORKDIR /usr/src/app
+WORKDIR /VP_AR_full_System_dockerized
 
 # Install system dependencies for OpenCV and Python
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -21,8 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Upgrade pip
 RUN python3 -m pip install --upgrade pip
 
-# (Optional) Install the ZED Python API
-# The stereolabs base image usually requires you to run their python API script
+# Install the ZED Python API
 RUN python3 /usr/local/zed/get_python_api.py
 
 # Copy the requirements file first to leverage Docker cache
@@ -31,8 +30,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Copy the rest of your offline pipeline code into the container
+# Copy the rest of the application code
 COPY . .
 
-# Set default command
-CMD ["python3", "processor.py"]
+# Set default command to run our extraction script
+CMD ["/bin/bash"]

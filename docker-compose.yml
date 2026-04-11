@@ -1,0 +1,33 @@
+services:
+  # --- STEP 1: extract the frames ---
+  extract:
+    build: .
+    container_name: zed_extractor
+    command: python3 extract_frames.py
+    volumes:
+      - ./data:/VP_AR_full_System_dockerized/data
+      - ./extract_frames.py:/VP_AR_full_System_dockerized/extract_frames.py
+    
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ---  STEP 2: TRAINING (FUTURE PREVIEW) ---
+  # train:
+  #   build: .
+  #   container_name: zed_trainer
+  #   command: python3 train.py
+  #   volumes:
+  #     - ./data:/VP_AR_full_System_dockerized/data
+  #     - ./train.py:/VP_AR_full_System_dockerized/train.py
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
