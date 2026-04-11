@@ -54,7 +54,7 @@ venv.bak/
 *.sublime-project
 
 # =========================
-# Unreal Engine 5 (Optional)
+# Unreal Engine 5
 # =========================
 Binaries/
 Build/
@@ -68,3 +68,20 @@ Saved/
 *.sdf
 *.xcworkspace
 *.DS_Store
+
+# =========================
+# local files
+# =========================
+*.log
+data/
+*_cache/
+*_data/
+*_data*
+*_cache*
+*.bak
+*.tmp
+*.svo
+*.svo2
+*.mp4
+*.avi
+.dockerignore
