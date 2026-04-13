@@ -7,6 +7,7 @@ services:
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
       - ./extract_frames.py:/VP_AR_full_System_dockerized/extract_frames.py
+      - ./sync_frames.py:/VP_AR_full_System_dockerized/sync_frames.py
     
     deploy:
       resources:
