@@ -1,5 +1,6 @@
 services:
-  # --- STEP 1: extract the frames ---
+  # --- STEP 1: Pre-processing  ---
+  ## 1.1: extract the frames from each camera
   extract:
     build: .
     container_name: zed_extractor
@@ -7,8 +8,22 @@ services:
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
       - ./extract_frames.py:/VP_AR_full_System_dockerized/extract_frames.py
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # # 1.2: sync the frames across both cameras
+  sync:
+    build: .
+    container_name: zed_syncer
+    command: python3 sync_frames.py
+    volumes:
+      - ./data:/VP_AR_full_System_dockerized/data
       - ./sync_frames.py:/VP_AR_full_System_dockerized/sync_frames.py
-    
     deploy:
       resources:
         reservations:

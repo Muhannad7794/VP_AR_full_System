@@ -1,6 +1,6 @@
 # Core Data & Math
 numpy<2.0.0
-scipy>=1.10.0
+scipy>=1.10.0,<1.13.0
 pandas>=2.0.0
 
 # Computer Vision
@@ -10,6 +10,9 @@ opencv-python<4.11.0
 # PyTorch 
 torch>=2.1.0 --extra-index-url https://download.pytorch.org/whl/cu121
 torchvision>=0.16.0 --extra-index-url https://download.pytorch.org/whl/cu121
+
+# Time Series / Synchronization
+fastdtw
 
 # Visualization & Logging
 matplotlib>=3.7.0

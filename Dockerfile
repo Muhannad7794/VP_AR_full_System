@@ -27,8 +27,9 @@ RUN python3 /usr/local/zed/get_python_api.py
 # Copy the requirements file first to leverage Docker cache
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip3 install --no-cache-dir -r requirements.txt
+# Wipe out the ZED API's numpy version, then force a clean install of Python dependencies
+RUN pip3 uninstall -y numpy && \
+    pip3 install --no-cache-dir --force-reinstall -r requirements.txt
 
 # Copy the rest of the application code
 COPY . .

@@ -1,50 +1,86 @@
-"""
-This file removes the first 51 frames of the Sony footage then indexes the \n
-remaining file starting from 0 so the frames sync from both the ZED and the\n
-Sony cameras.\n"""
-
+import cv2
+import numpy as np
 import os
 import glob
-
-# Paths as they appear INSIDE the Docker container
-SONY_FOLDER = "/VP_AR_full_System_dockerized/data/extracted/sony_rgb/"
-ZED_RGB_FOLDER = "/VP_AR_full_System_dockerized/data/extracted/zed_rgb/"
-ZED_DEPTH_FOLDER = "/VP_AR_full_System_dockerized/data/extracted/zed_depth/"
-
-OFFSET = 51
+from fastdtw import fastdtw
+from scipy.spatial.distance import euclidean
 
 
-def sync_folders():
-    # 1. Get sorted lists of all files
-    sony_files = sorted(glob.glob(os.path.join(SONY_FOLDER, "*.png")))
-    zed_rgb_files = sorted(glob.glob(os.path.join(ZED_RGB_FOLDER, "*.png")))
-    zed_depth_files = sorted(glob.glob(os.path.join(ZED_DEPTH_FOLDER, "*.png")))
+def calculate_motion_signature(frame_folder):
+    """
+    Calculates the structural motion magnitude across a sequence of frames.
+    Since the camera is on a tripod, pixel differences represent the actor's movement.
+    """
+    # Load all frame paths and sort them numerically
+    frame_paths = sorted(glob.glob(os.path.join(frame_folder, "*.png")))
 
-    print(f"Found {len(sony_files)} Sony frames and {len(zed_rgb_files)} ZED frames.")
+    motion_signature = []
+    prev_gray = None
 
-    # 2. Delete the leading Sony frames that have no ZED match
-    print(f"Deleting first {OFFSET} unmatched Sony frames...")
-    for i in range(OFFSET):
-        os.remove(sony_files[i])
+    print(f"Processing {len(frame_paths)} frames in {frame_folder}...")
 
-    # 3. Rename the remaining Sony frames to start from 00000
-    print("Re-indexing Sony frames...")
-    remaining_sony = sony_files[OFFSET:]
-    for idx, old_path in enumerate(remaining_sony):
-        new_name = f"sony_rgb_{idx:05d}.png"
-        os.rename(old_path, os.path.join(SONY_FOLDER, new_name))
+    for path in frame_paths:
+        frame = cv2.imread(path)
+        # Convert to grayscale to simplify calculations
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # 4. Trim the END of the ZED folders
-    # Because we shifted Sony, we now have 51 'orphaned' ZED frames at the very end
-    print(f"Trimming last {OFFSET} unmatched ZED frames...")
-    num_to_keep = len(remaining_sony)
+        if prev_gray is not None:
+            # Calculate the absolute difference between the current and previous frame
+            frame_diff = cv2.absdiff(gray, prev_gray)
+            # Sum the pixel differences to get a single 'motion magnitude' value
+            motion_magnitude = np.sum(frame_diff)
+            motion_signature.append(motion_magnitude)
 
-    for i in range(num_to_keep, len(zed_rgb_files)):
-        os.remove(zed_rgb_files[i])
-        os.remove(zed_depth_files[i])
+        prev_gray = gray
 
-    print(f"Done! You now have {num_to_keep} perfectly synchronized frame sets.")
+    # Normalize the signature so both cameras are on the same scale (0 to 1)
+    motion_signature = np.array(motion_signature)
+    motion_signature = motion_signature / np.max(motion_signature)
+
+    return motion_signature, frame_paths
+
+
+def synchronize_datasets():
+    # Define paths to your extracted frame datasets
+    sony_folder = "data/extracted/sony_rgb/"
+    zed_folder = "data/extracted/zed_rgb/"
+
+    # Step 1: Extract 1D motion signatures from both camera datasets
+    sony_motion, sony_paths = calculate_motion_signature(sony_folder)
+    zed_motion, zed_paths = calculate_motion_signature(zed_folder)
+
+    print("Calculating Dynamic Time Warping (DTW) path to fix clock drift...")
+
+    # Reshape the arrays to (N, 1) so SciPy treats each frame's value as a 1D vector
+    sony_motion = sony_motion.reshape(-1, 1)
+    zed_motion = zed_motion.reshape(-1, 1)
+
+    # Step 2: Use DTW to dynamically align the two motion signatures
+    # DTW will return a 'path' which is a list of index pairs: [(sony_idx, zed_idx), ...]
+    distance, path = fastdtw(sony_motion, zed_motion, dist=euclidean)
+
+    print(f"DTW Alignment Distance: {distance}")
+
+    # Step 3: Create a mapping dictionary to rename/sync the files
+    frame_mapping = {}
+    for sony_idx, zed_idx in path:
+        # Since we compared frame differences, index 0 in motion corresponds to frame 1
+        actual_sony_frame = sony_idx + 1
+        actual_zed_frame = zed_idx + 1
+
+        # Keep the first matching ZED frame for each Sony frame to handle drift
+        if actual_sony_frame not in frame_mapping:
+            frame_mapping[actual_sony_frame] = actual_zed_frame
+
+    # Print a sample of the drift correction
+    print("\nSample of the dynamic synchronization mapping:")
+    for i in range(1, len(frame_mapping), len(frame_mapping) // 10):
+        print(f"Sony Frame {i} -> Maps to ZED Frame {frame_mapping[i]}")
+
+    # (Optional) Step 4: You can now use this frame_mapping dictionary to rename
+    # or copy your ZED frames so they perfectly match the Sony frame numbers!
 
 
 if __name__ == "__main__":
-    sync_folders()
+    synchronize_datasets()
+ 
