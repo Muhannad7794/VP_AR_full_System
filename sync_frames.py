@@ -1,86 +1,127 @@
-import cv2
+import torch
+import torchvision.models as models
+import torchvision.transforms as transforms
+from PIL import Image
 import numpy as np
 import os
 import glob
+import json
 from fastdtw import fastdtw
-from scipy.spatial.distance import euclidean
+from scipy.spatial.distance import cosine
 
 
-def calculate_motion_signature(frame_folder):
+def get_resnet_features(frame_folder, model, transform, device):
     """
-    Calculates the structural motion magnitude across a sequence of frames.
-    Since the camera is on a tripod, pixel differences represent the actor's movement.
+    Extracts deep semantic features from all images in a folder using ResNet50.
     """
-    # Load all frame paths and sort them numerically
     frame_paths = sorted(glob.glob(os.path.join(frame_folder, "*.png")))
+    features_list = []
 
-    motion_signature = []
-    prev_gray = None
+    print(f"Extracting AI features from {len(frame_paths)} frames in {frame_folder}...")
 
-    print(f"Processing {len(frame_paths)} frames in {frame_folder}...")
+    # Set model to evaluation mode
+    model.eval()
 
-    for path in frame_paths:
-        frame = cv2.imread(path)
-        # Convert to grayscale to simplify calculations
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # We don't need to calculate gradients for feature extraction
+    with torch.no_grad():
+        for path in frame_paths:
+            try:
+                # Load image, convert to RGB
+                img = Image.open(path).convert("RGB")
 
-        if prev_gray is not None:
-            # Calculate the absolute difference between the current and previous frame
-            frame_diff = cv2.absdiff(gray, prev_gray)
-            # Sum the pixel differences to get a single 'motion magnitude' value
-            motion_magnitude = np.sum(frame_diff)
-            motion_signature.append(motion_magnitude)
+                # Apply standard ResNet preprocessing
+                img_t = transform(img).unsqueeze(0).to(device)
 
-        prev_gray = gray
+                # Extract features
+                features = model(img_t)
 
-    # Normalize the signature so both cameras are on the same scale (0 to 1)
-    motion_signature = np.array(motion_signature)
-    motion_signature = motion_signature / np.max(motion_signature)
+                # Flatten to 1D array and move back to CPU
+                features_np = features.cpu().numpy().flatten()
+                features_list.append(features_np)
 
-    return motion_signature, frame_paths
+            except Exception as e:
+                print(f"Error processing {path}: {e}")
+                # Append a zero vector if an image fails to load
+                features_list.append(np.zeros(2048))
+
+    return np.array(features_list), frame_paths
 
 
 def synchronize_datasets():
-    # Define paths to your extracted frame datasets
     sony_folder = "data/extracted/sony_rgb/"
     zed_folder = "data/extracted/zed_rgb/"
+    json_output_path = "data/frame_mapping.json"
 
-    # Step 1: Extract 1D motion signatures from both camera datasets
-    sony_motion, sony_paths = calculate_motion_signature(sony_folder)
-    zed_motion, zed_paths = calculate_motion_signature(zed_folder)
+    # --- Setup PyTorch and ResNet50 ---
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using compute device: {device}")
 
-    print("Calculating Dynamic Time Warping (DTW) path to fix clock drift...")
+    # Load pre-trained ResNet50
+    resnet50 = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
 
-    # Reshape the arrays to (N, 1) so SciPy treats each frame's value as a 1D vector
-    sony_motion = sony_motion.reshape(-1, 1)
-    zed_motion = zed_motion.reshape(-1, 1)
+    # Remove the final classification layer (fc) to get the raw 2048-d feature vector
+    resnet_feature_extractor = torch.nn.Sequential(*list(resnet50.children())[:-1]).to(
+        device
+    )
 
-    # Step 2: Use DTW to dynamically align the two motion signatures
-    # DTW will return a 'path' which is a list of index pairs: [(sony_idx, zed_idx), ...]
-    distance, path = fastdtw(sony_motion, zed_motion, dist=euclidean)
+    # Standard ImageNet preprocessing transforms
+    preprocess = transforms.Compose(
+        [
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
 
-    print(f"DTW Alignment Distance: {distance}")
+    # --- Step 1: Extract Features ---
+    sony_features, _ = get_resnet_features(
+        sony_folder, resnet_feature_extractor, preprocess, device
+    )
+    zed_features, _ = get_resnet_features(
+        zed_folder, resnet_feature_extractor, preprocess, device
+    )
 
-    # Step 3: Create a mapping dictionary to rename/sync the files
+    if len(sony_features) == 0 or len(zed_features) == 0:
+        print("Error: Could not extract features. Check your folder paths.")
+        return
+
+    print("\nCalculating sequence alignment using DTW and Cosine Similarity...")
+    print("This may take a few minutes depending on dataset size...")
+
+    # --- Step 2: Dynamic Time Warping (DTW) ---
+    # We use 'cosine' distance. Cosine distance is 1 - Cosine Similarity.
+    # Lower distance = higher similarity.
+    distance, path = fastdtw(sony_features, zed_features, dist=cosine)
+
+    print(f"DTW Alignment Complete. Total Distance: {distance:.4f}")
+
+    # --- Step 3: Create Mapping and Save to JSON ---
     frame_mapping = {}
-    for sony_idx, zed_idx in path:
-        # Since we compared frame differences, index 0 in motion corresponds to frame 1
-        actual_sony_frame = sony_idx + 1
-        actual_zed_frame = zed_idx + 1
 
-        # Keep the first matching ZED frame for each Sony frame to handle drift
+    # DTW returns a path of index pairs. We keep the first matched ZED frame for each Sony frame
+    for sony_idx, zed_idx in path:
+        actual_sony_frame = int(sony_idx + 1)
+        actual_zed_frame = int(zed_idx + 1)
+
         if actual_sony_frame not in frame_mapping:
             frame_mapping[actual_sony_frame] = actual_zed_frame
 
-    # Print a sample of the drift correction
-    print("\nSample of the dynamic synchronization mapping:")
-    for i in range(1, len(frame_mapping), len(frame_mapping) // 10):
-        print(f"Sony Frame {i} -> Maps to ZED Frame {frame_mapping[i]}")
+    # Print a sample of the mapping to the console
+    print("\nSample of the synchronized mapping:")
+    keys = list(frame_mapping.keys())
+    for i in range(0, len(keys), max(1, len(keys) // 10)):
+        sony_f = keys[i]
+        print(f"Sony Frame {sony_f:05d} -> ZED Frame {frame_mapping[sony_f]:05d}")
 
-    # (Optional) Step 4: You can now use this frame_mapping dictionary to rename
-    # or copy your ZED frames so they perfectly match the Sony frame numbers!
+    # Save to JSON
+    try:
+        with open(json_output_path, "w") as json_file:
+            json.dump(frame_mapping, json_file, indent=4)
+        print(f"\nSUCCESS: Frame mapping successfully saved to -> {json_output_path}")
+    except Exception as e:
+        print(f"\nFAILED to save JSON: {e}")
 
 
 if __name__ == "__main__":
     synchronize_datasets()
- 
