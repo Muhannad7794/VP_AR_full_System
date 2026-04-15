@@ -31,6 +31,22 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+  
+  # 1.3: smooth the nonlinear DTW mapping to fix capture jitter
+  smooth:
+    build: .
+    container_name: zed_smoother
+    command: python3 smooth_frames_mapping.py
+    volumes:
+      - ./data:/VP_AR_full_System_dockerized/data
+      - ./smooth_frames_mapping.py:/VP_AR_full_System_dockerized/smooth_frames_mapping.py
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   # ---  STEP 2: TRAINING (FUTURE PREVIEW) ---
   # train:
