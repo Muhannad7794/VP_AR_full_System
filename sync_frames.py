@@ -90,7 +90,7 @@ def synchronize_datasets():
     print("This may take a few minutes depending on dataset size...")
 
     # --- Step 2: Dynamic Time Warping (DTW) ---
-    # We use 'cosine' distance. Cosine distance is 1 - Cosine Similarity.
+    # Using 'cosine' distance. Cosine distance is 1 - Cosine Similarity.
     # Lower distance = higher similarity.
     distance, path = fastdtw(sony_features, zed_features, dist=cosine)
 
@@ -99,7 +99,7 @@ def synchronize_datasets():
     # --- Step 3: Create Mapping and Save to JSON ---
     frame_mapping = {}
 
-    # DTW returns a path of index pairs. We keep the first matched ZED frame for each Sony frame
+    # DTW returns a path of index pairs. This keeps the first matched ZED frame for each Sony frame
     for sony_idx, zed_idx in path:
         actual_sony_frame = int(sony_idx + 1)
         actual_zed_frame = int(zed_idx + 1)
