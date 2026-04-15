@@ -40,6 +40,8 @@ services:
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
       - ./smooth_frames_mapping.py:/VP_AR_full_System_dockerized/smooth_frames_mapping.py
+      # Run the comparison script as a sanity check to generate the comparison text file in data/
+      - ./compare_mappings.py:/VP_AR_full_System_dockerized/compare_mappings.py
     deploy:
       resources:
         reservations:
