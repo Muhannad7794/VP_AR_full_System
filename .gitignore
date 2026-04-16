@@ -76,7 +76,6 @@ Saved/
 data/
 *_cache/
 *_data/
-*_data*
 *_cache*
 *.bak
 *.tmp

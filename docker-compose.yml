@@ -49,7 +49,23 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-
+  
+  # 1.4: Compile the matched frames into a clean synced dataset
+  compile:
+    build: .
+    container_name: zed_compiler
+    command: python3 compile_dataset.py
+    volumes:
+      - ./data:/VP_AR_full_System_dockerized/data
+      - ./compile_dataset.py:/VP_AR_full_System_dockerized/compile_dataset.py
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+              
   # ---  STEP 2: TRAINING (FUTURE PREVIEW) ---
   # train:
   #   build: .
