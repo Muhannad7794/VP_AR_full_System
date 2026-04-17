@@ -1,5 +1,5 @@
 services:
-  # --- STEP 1: Pre-processing  ---
+  # --- STEP 1: Data Preparation ---
   ## 1.1: extract the frames from each camera
   extract:
     build: .
@@ -65,8 +65,25 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+   # --- STEP 2: PRE-PROCESSING (SIGNAL CONDITIONING) ---
+  ## 2.1: Normalize, downsample, and convert to PyTorch tensors
+  preprocess:
+    build: .
+    container_name: zed_preprocessor
+    command: python3 preprocess_tensors.py
+    volumes:
+      - ./data:/VP_AR_full_System_dockerized/data
+      - ./preprocess_tensors.py:/VP_AR_full_System_dockerized/preprocess_tensors.py
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
               
-  # ---  STEP 2: TRAINING (FUTURE PREVIEW) ---
+  # ---  STEP 3: TRAINING (FUTURE PREVIEW) ---
   # train:
   #   build: .
   #   container_name: zed_trainer
