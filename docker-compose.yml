@@ -84,17 +84,36 @@ services:
               capabilities: [gpu]
               
   # ---  STEP 3: TRAINING (FUTURE PREVIEW) ---
-  # train:
-  #   build: .
-  #   container_name: zed_trainer
-  #   command: python3 train.py
-  #   volumes:
-  #     - ./data:/VP_AR_full_System_dockerized/data
-  #     - ./train.py:/VP_AR_full_System_dockerized/train.py
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: all
-  #             capabilities: [gpu]
+  ## 3.1: Generating perfect masks around te human figure. 
+  ## This is the "ground truth" that the CNN will learn to predict from the raw ZED data.
+  train:
+    build: .
+    container_name: zed_trainer
+    command: python3 generate_ground_truth.py
+    volumes:
+      - ./data:/VP_AR_full_System_dockerized/data
+      - ./generate_ground_truth.py:/VP_AR_full_System_dockerized/generate_ground_truth.py
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ## 3.2: Train the CNN and export to Engine-Agnostic ONNX format
+  train_cnn:
+    build: .
+    container_name: zed_cnn_trainer
+    command: python3 train.py
+    shm_size: '8gb'
+    volumes:
+      - ./data:/VP_AR_full_System_dockerized/data
+      - ./train.py:/VP_AR_full_System_dockerized/train.py
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

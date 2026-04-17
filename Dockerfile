@@ -24,6 +24,9 @@ RUN python3 -m pip install --upgrade pip
 # Install the ZED Python API
 RUN python3 /usr/local/zed/get_python_api.py
 
+# Install ONNX and ONNXScript for model handling
+RUN pip install onnx onnxscript
+
 # Copy the requirements file first to leverage Docker cache
 COPY requirements.txt .
 
