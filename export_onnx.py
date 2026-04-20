@@ -1,31 +1,45 @@
 import torch
 import onnx
+import os
 from torchvision import models
 from torchvision.models.segmentation.deeplabv3 import DeepLabHead
-import os
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+# This wrapper intercepts the dictionary and extracts the raw tensor for Unreal Engine.
+class UEInferenceWrapper(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, x):
+        return self.model(x)["out"]
+
+
 def export_saved_model():
     print("1. Loading the MobileNetV3 Student Architecture...")
-    model = models.segmentation.deeplabv3_mobilenet_v3_large(weights=None)
-    model.classifier = DeepLabHead(960, 2)
+    base_model = models.segmentation.deeplabv3_mobilenet_v3_large(weights=None)
+    base_model.classifier = DeepLabHead(960, 2)
 
     print("2. Injecting your custom trained weights from the .pth file...")
-    model.load_state_dict(
+    base_model.load_state_dict(
         torch.load("data/models/studio_occlusion_model.pth", map_location=DEVICE),
         strict=False,
     )
+
+    print("3. Wrapping model to strip dictionaries for Unreal Engine...")
+    model = UEInferenceWrapper(base_model)
     model.to(DEVICE)
+
+    # CRITICAL: We must call eval() on the wrapper itself to lock the math!
     model.eval()
 
-    print("3. Translating to ONNX format (Opset 18)...")
+    print("4. Translating to ONNX format (Opset 18)...")
     dummy_input = torch.randn(1, 3, 360, 640, device=DEVICE)
     onnx_path = "data/models/studio_occlusion_model.onnx"
 
-    # Removed dynamic_axes (Fixed shapes prevent DirectX 12 crashes in UE5)
-    # Updated to opset 18 to satisfy the PyTorch Dynamo exporter
+    # We pass the standard model (NOT a traced module) and let PyTorch do its thing
     torch.onnx.export(
         model,
         dummy_input,
@@ -37,21 +51,21 @@ def export_saved_model():
         output_names=["output"],
     )
 
-    print("4. Forcing monolithic file merge for Unreal Engine...")
-    # Load the split model using the native ONNX library
+    print("5. Forcing monolithic file merge for Unreal Engine...")
     onnx_model = onnx.load(onnx_path)
-
-    # Save it back out, explicitly forcing it to merge the .data weights back inside
     onnx.save_model(
         onnx_model, onnx_path, save_as_external_data=False, all_tensors_to_one_file=True
     )
 
-    # Clean up the leftover .data file so it doesn't cause confusion
+    # Clean up the leftover .data file if the Dynamo exporter creates one
     data_file = onnx_path + ".data"
     if os.path.exists(data_file):
         os.remove(data_file)
 
-    print(f"Success! Monolithic, Engine-ready model exported to {onnx_path}")
+    print("6. Running strict C++ integrity check...")
+    onnx.checker.check_model(onnx_model)
+
+    print(f"Success! Clean, Monolithic, Engine-ready model exported to {onnx_path}")
 
 
 if __name__ == "__main__":
