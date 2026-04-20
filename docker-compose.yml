@@ -84,7 +84,7 @@ services:
               capabilities: [gpu]
               
   # ---  STEP 3: TRAINING (FUTURE PREVIEW) ---
-  ## 3.1: Generating perfect masks around te human figure. 
+  ## 3.1: Generating the masks around the human figure. 
   ## This is the "ground truth" that the CNN will learn to predict from the raw ZED data.
   train:
     build: .
@@ -110,6 +110,8 @@ services:
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
       - ./train.py:/VP_AR_full_System_dockerized/train.py
+      # Run this script to export the model to ONNX format
+      - ./export_onnx.py:/VP_AR_full_System_dockerized/export_onnx.py
     deploy:
       resources:
         reservations:
