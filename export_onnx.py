@@ -7,7 +7,6 @@ from torchvision.models.segmentation.deeplabv3 import DeepLabHead
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-# This wrapper intercepts the dictionary and extracts the raw tensor for Unreal Engine.
 class UEInferenceWrapper(torch.nn.Module):
     def __init__(self, model):
         super().__init__()
@@ -31,15 +30,12 @@ def export_saved_model():
     print("3. Wrapping model to strip dictionaries for Unreal Engine...")
     model = UEInferenceWrapper(base_model)
     model.to(DEVICE)
-
-    # CRITICAL: We must call eval() on the wrapper itself to lock the math!
     model.eval()
 
     print("4. Translating to ONNX format (Opset 18)...")
     dummy_input = torch.randn(1, 3, 360, 640, device=DEVICE)
     onnx_path = "data/models/studio_occlusion_model.onnx"
 
-    # We pass the standard model (NOT a traced module) and let PyTorch do its thing
     torch.onnx.export(
         model,
         dummy_input,
@@ -51,13 +47,16 @@ def export_saved_model():
         output_names=["output"],
     )
 
-    print("5. Forcing monolithic file merge for Unreal Engine...")
+    print("5. Forcing monolithic file merge and fixing IR Version for UE 5.4...")
     onnx_model = onnx.load(onnx_path)
+
+    # CRITICAL FIX: Downgrade the ID card so UE 5.4's security checker lets it through
+    onnx_model.ir_version = 8
+
     onnx.save_model(
         onnx_model, onnx_path, save_as_external_data=False, all_tensors_to_one_file=True
     )
 
-    # Clean up the leftover .data file if the Dynamo exporter creates one
     data_file = onnx_path + ".data"
     if os.path.exists(data_file):
         os.remove(data_file)
@@ -65,7 +64,7 @@ def export_saved_model():
     print("6. Running strict C++ integrity check...")
     onnx.checker.check_model(onnx_model)
 
-    print(f"Success! Clean, Monolithic, Engine-ready model exported to {onnx_path}")
+    print(f"Success! Clean, UE-compatible model exported to {onnx_path}")
 
 
 if __name__ == "__main__":
