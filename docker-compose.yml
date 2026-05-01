@@ -1,13 +1,13 @@
 services:
-  # --- STEP 1: Data Preparation ---
-  ## 1.1: extract the frames from each camera
+  # --- Temporal Alignment ---
+  # 1.1: extract the frames from each camera
   extract:
     build: .
     container_name: zed_extractor
-    command: python3 extract_frames.py
+    command: python3 temporal_alignment/extract_frames.py
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
-      - ./extract_frames.py:/VP_AR_full_System_dockerized/extract_frames.py
+      - ./temporal_alignment:/VP_AR_full_System_dockerized/temporal_alignment
     deploy:
       resources:
         reservations:
@@ -16,14 +16,14 @@ services:
               count: all
               capabilities: [gpu]
 
-  # # 1.2: sync the frames across both cameras
+  # 1.2: sync the frames across both cameras
   sync:
     build: .
     container_name: zed_syncer
-    command: python3 sync_frames.py
+    command: python3 temporal_alignment/sync_frames.py
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
-      - ./sync_frames.py:/VP_AR_full_System_dockerized/sync_frames.py
+      - ./temporal_alignment:/VP_AR_full_System_dockerized/temporal_alignment
     deploy:
       resources:
         reservations:
@@ -36,12 +36,10 @@ services:
   smooth:
     build: .
     container_name: zed_smoother
-    command: python3 smooth_frames_mapping.py
+    command: python3 temporal_alignment/smooth_frames_mapping.py
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
-      - ./smooth_frames_mapping.py:/VP_AR_full_System_dockerized/smooth_frames_mapping.py
-      # Run the comparison script as a sanity check to generate the comparison text file in data/
-      - ./compare_mappings.py:/VP_AR_full_System_dockerized/compare_mappings.py
+      - ./temporal_alignment:/VP_AR_full_System_dockerized/temporal_alignment
     deploy:
       resources:
         reservations:
@@ -54,10 +52,10 @@ services:
   compile:
     build: .
     container_name: zed_compiler
-    command: python3 compile_dataset.py
+    command: python3 temporal_alignment/compile_dataset.py
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
-      - ./compile_dataset.py:/VP_AR_full_System_dockerized/compile_dataset.py
+      - ./temporal_alignment:/VP_AR_full_System_dockerized/temporal_alignment
     deploy:
       resources:
         reservations:
@@ -66,52 +64,15 @@ services:
               count: all
               capabilities: [gpu]
 
-   # --- STEP 2: PRE-PROCESSING (SIGNAL CONDITIONING) ---
-  ## 2.1: Normalize, downsample, and convert to PyTorch tensors
-  preprocess:
+  # --- Spatial Calibration ---
+  # 2.1: Calculate Lens Distortion and Stereo Offset
+  calibrate:
     build: .
-    container_name: zed_preprocessor
-    command: python3 preprocess_tensors.py
+    container_name: zed_calibrator
+    command: python3 spatial_calibration/stereo_calibrate.py
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
-      - ./preprocess_tensors.py:/VP_AR_full_System_dockerized/preprocess_tensors.py
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-              
-  # ---  STEP 3: TRAINING (FUTURE PREVIEW) ---
-  ## 3.1: Generating the masks around the human figure. 
-  ## This is the "ground truth" that the CNN will learn to predict from the raw ZED data.
-  train:
-    build: .
-    container_name: zed_trainer
-    command: python3 generate_ground_truth.py
-    volumes:
-      - ./data:/VP_AR_full_System_dockerized/data
-      - ./generate_ground_truth.py:/VP_AR_full_System_dockerized/generate_ground_truth.py
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
-  ## 3.2: Train the CNN and export to Engine-Agnostic ONNX format
-  train_cnn:
-    build: .
-    container_name: zed_cnn_trainer
-    command: python3 train.py
-    shm_size: '8gb'
-    volumes:
-      - ./data:/VP_AR_full_System_dockerized/data
-      - ./train.py:/VP_AR_full_System_dockerized/train.py
-      # Run this script to export the model to ONNX format
-      - ./export_onnx.py:/VP_AR_full_System_dockerized/export_onnx.py
+      - ./spatial_calibration:/VP_AR_full_System_dockerized/spatial_calibration
     deploy:
       resources:
         reservations:
