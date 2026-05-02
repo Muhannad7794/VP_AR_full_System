@@ -6,6 +6,10 @@ fastdtw
 # Computer Vision 
 opencv-contrib-python==4.8.0.76
 
+# Deep Learning (Required for ResNet50 AI Sync)
+torch>=2.1.0 --extra-index-url https://download.pytorch.org/whl/cu121
+torchvision>=0.16.0 --extra-index-url https://download.pytorch.org/whl/cu121
+
 # Visualization
 matplotlib>=3.7.0
 tqdm>=4.65.0

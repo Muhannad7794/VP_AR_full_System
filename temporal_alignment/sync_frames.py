@@ -1,124 +1,90 @@
-import torch
-import torchvision.models as models
-import torchvision.transforms as transforms
-from PIL import Image
+# temporal_alignment/sync_frames.py
+import cv2
 import numpy as np
 import os
 import glob
 import json
+import argparse
 from fastdtw import fastdtw
-from scipy.spatial.distance import cosine
+from scipy.spatial.distance import euclidean
 
 
-def get_resnet_features(frame_folder, model, transform, device):
-    """
-    Extracts deep semantic features from all images in a folder using ResNet50.
-    """
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dataset", type=str, required=True, help="Name of the dataset folder"
+    )
+    return parser.parse_args()
+
+
+def get_motion_energy(frame_folder):
     frame_paths = sorted(glob.glob(os.path.join(frame_folder, "*.png")))
-    features_list = []
+    energy_list = [0.0]  # First frame has 0 motion relative to itself
 
-    print(f"Extracting AI features from {len(frame_paths)} frames in {frame_folder}...")
+    print(
+        f"Calculating motion energy for {len(frame_paths)} frames in {frame_folder}..."
+    )
 
-    # Set model to evaluation mode
-    model.eval()
+    # Read first frame and blur heavily to remove sensor noise
+    prev_frame = cv2.imread(frame_paths[0], cv2.IMREAD_GRAYSCALE)
+    prev_frame = cv2.GaussianBlur(prev_frame, (21, 21), 0)
 
-    # We don't need to calculate gradients for feature extraction
-    with torch.no_grad():
-        for path in frame_paths:
-            try:
-                # Load image, convert to RGB
-                img = Image.open(path).convert("RGB")
+    for path in frame_paths[1:]:
+        curr_frame = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+        curr_frame = cv2.GaussianBlur(curr_frame, (21, 21), 0)
 
-                # Apply standard ResNet preprocessing
-                img_t = transform(img).unsqueeze(0).to(device)
+        # Calculate absolute difference between current and previous frame
+        diff = cv2.absdiff(prev_frame, curr_frame)
 
-                # Extract features
-                features = model(img_t)
+        # The mean of the difference represents the total "Motion Energy" of the frame
+        energy = np.mean(diff)
+        energy_list.append(energy)
 
-                # Flatten to 1D array and move back to CPU
-                features_np = features.cpu().numpy().flatten()
-                features_list.append(features_np)
+        prev_frame = curr_frame
 
-            except Exception as e:
-                print(f"Error processing {path}: {e}")
-                # Append a zero vector if an image fails to load
-                features_list.append(np.zeros(2048))
-
-    return np.array(features_list), frame_paths
+    # FastDTW expects a 2D array of coordinates, so we reshape the 1D list to (N, 1)
+    return np.array(energy_list).reshape(-1, 1), frame_paths
 
 
 def synchronize_datasets():
-    sony_folder = "data/extracted/sony_rgb/"
-    zed_folder = "data/extracted/zed_rgb/"
-    json_output_path = "data/frame_mapping.json"
+    args = parse_arguments()
 
-    # --- Setup PyTorch and ResNet50 ---
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using compute device: {device}")
+    sony_folder = f"data/extracted/{args.dataset}/sony_rgb/"
+    zed_folder = f"data/extracted/{args.dataset}/zed_rgb/"
 
-    # Load pre-trained ResNet50
-    resnet50 = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+    json_dir = f"data/json_output/{args.dataset}/"
+    os.makedirs(json_dir, exist_ok=True)
+    json_output_path = os.path.join(json_dir, "frame_mapping.json")
 
-    # Remove the final classification layer (fc) to get the raw 2048-d feature vector
-    resnet_feature_extractor = torch.nn.Sequential(*list(resnet50.children())[:-1]).to(
-        device
-    )
+    # 1. Extract 1D Motion Energy
+    sony_energy, _ = get_motion_energy(sony_folder)
+    zed_energy, _ = get_motion_energy(zed_folder)
 
-    # Standard ImageNet preprocessing transforms
-    preprocess = transforms.Compose(
-        [
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
-    )
-
-    # --- Step 1: Extract Features ---
-    sony_features, _ = get_resnet_features(
-        sony_folder, resnet_feature_extractor, preprocess, device
-    )
-    zed_features, _ = get_resnet_features(
-        zed_folder, resnet_feature_extractor, preprocess, device
-    )
-
-    if len(sony_features) == 0 or len(zed_features) == 0:
-        print("Error: Could not extract features. Check your folder paths.")
+    if len(sony_energy) == 1 or len(zed_energy) == 1:
+        print("Error: Could not extract frames. Check your folder paths.")
         return
 
-    print("\nCalculating sequence alignment using DTW and Cosine Similarity...")
-    print("This may take a few minutes depending on dataset size...")
+    print("\nAligning motion velocity peaks using DTW (This will be very fast)...")
 
-    # --- Step 2: Dynamic Time Warping (DTW) ---
-    # Using 'cosine' distance. Cosine distance is 1 - Cosine Similarity.
-    # Lower distance = higher similarity.
-    distance, path = fastdtw(sony_features, zed_features, dist=cosine)
-
+    # 2. Use Euclidean distance to match the amplitude of the motion peaks
+    distance, path = fastdtw(sony_energy, zed_energy, dist=euclidean)
     print(f"DTW Alignment Complete. Total Distance: {distance:.4f}")
 
-    # --- Step 3: Create Mapping and Save to JSON ---
+    # 3. Create Mapping
     frame_mapping = {}
-
-    # DTW returns a path of index pairs. This keeps the first matched ZED frame for each Sony frame
     for sony_idx, zed_idx in path:
         actual_sony_frame = int(sony_idx + 1)
         actual_zed_frame = int(zed_idx + 1)
 
+        # Keep the first matched ZED frame for each Sony frame
         if actual_sony_frame not in frame_mapping:
             frame_mapping[actual_sony_frame] = actual_zed_frame
-
-    # Print a sample of the mapping to the console
-    print("\nSample of the synchronized mapping:")
-    keys = list(frame_mapping.keys())
-    for i in range(0, len(keys), max(1, len(keys) // 10)):
-        sony_f = keys[i]
-        print(f"Sony Frame {sony_f:05d} -> ZED Frame {frame_mapping[sony_f]:05d}")
 
     # Save to JSON
     try:
         with open(json_output_path, "w") as json_file:
             json.dump(frame_mapping, json_file, indent=4)
-        print(f"\nSUCCESS: Frame mapping successfully saved to -> {json_output_path}")
+        print(f"\nSUCCESS: Frame mapping saved -> {json_output_path}")
     except Exception as e:
         print(f"\nFAILED to save JSON: {e}")
 

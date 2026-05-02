@@ -1,61 +1,14 @@
 services:
-  # --- Temporal Alignment ---
-  # 1.1: extract the frames from each camera
-  extract:
-    build: .
-    container_name: zed_extractor
-    command: python3 temporal_alignment/extract_frames.py
-    volumes:
-      - ./data:/VP_AR_full_System_dockerized/data
-      - ./temporal_alignment:/VP_AR_full_System_dockerized/temporal_alignment
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
-  # 1.2: sync the frames across both cameras
+  # Temporal synchronizer
   sync:
     build: .
-    container_name: zed_syncer
-    command: python3 temporal_alignment/sync_frames.py
+    container_name: temporal_alignment
+
+    command: tail -f /dev/null
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
       - ./temporal_alignment:/VP_AR_full_System_dockerized/temporal_alignment
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-  
-  # 1.3: smooth the nonlinear DTW mapping to fix capture jitter
-  smooth:
-    build: .
-    container_name: zed_smoother
-    command: python3 temporal_alignment/smooth_frames_mapping.py
-    volumes:
-      - ./data:/VP_AR_full_System_dockerized/data
-      - ./temporal_alignment:/VP_AR_full_System_dockerized/temporal_alignment
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-  
-  # 1.4: Compile the matched frames into a clean synced dataset
-  compile:
-    build: .
-    container_name: zed_compiler
-    command: python3 temporal_alignment/compile_dataset.py
-    volumes:
-      - ./data:/VP_AR_full_System_dockerized/data
-      - ./temporal_alignment:/VP_AR_full_System_dockerized/temporal_alignment
+      - ./run_temporal.sh:/VP_AR_full_System_dockerized/run_temporal.sh
     deploy:
       resources:
         reservations:
@@ -64,15 +17,16 @@ services:
               count: all
               capabilities: [gpu]
 
-  # --- Spatial Calibration ---
-  # 2.1: Calculate Lens Distortion and Stereo Offset
-  calibrate:
+  # Spatial calibrator
+  align:
     build: .
-    container_name: zed_calibrator
-    command: python3 spatial_calibration/stereo_calibrate.py
+    container_name: spatial_alignment
+    # Entrypoint forces this container to ALWAYS run the calibrator python script
+    # Any arguments added after 'docker compose run align' get appended to this!
+    entrypoint: ["python3", "spatial_alignment/stereo_calibrate.py"]
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
-      - ./spatial_calibration:/VP_AR_full_System_dockerized/spatial_calibration
+      - ./spatial_alignment:/VP_AR_full_System_dockerized/spatial_alignment
     deploy:
       resources:
         reservations:
