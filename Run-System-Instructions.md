@@ -3,6 +3,7 @@
 ## 🚀 Getting Started
 
 **Step 1: Build the Environment**
+
 Clone this repository to your local machine, open your terminal in the root folder, and build the GPU-accelerated Docker container. This only needs to be done once.
 
 ```
@@ -80,7 +81,8 @@ docker compose run --rm sync ./run_spatial.sh dataset_01
 
 ### 2.4 Diagnostic Tools
 If detection is failing, run the diagnostic script to identify the correct board settings:
-```docker compose run --rm align python3 spatial_alignment/diagnose_detection.py --dataset dataset_01
+```
+docker compose run --rm align python3 spatial_alignment/diagnose_detection.py --dataset dataset_01
 ```
 This tests all supported ArUco dictionary variants and board size combinations and identifies the working configuration.
 
