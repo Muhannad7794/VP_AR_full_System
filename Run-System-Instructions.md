@@ -98,11 +98,11 @@ This tests all supported ArUco dictionary variants and board size combinations a
 // start a table with 2 fileds, Path, Content
 | Path | Content |
 | --- | --- |
-| data/synced/<dataset>| Temporally aligned Sony and ZED frame pairs |
-|data/picked_for_alignment/<dataset>/ | Manually curated calibration frame pairs |
-| data/json_output/<dataset>/spatial_calibration.json | Intrinsics, extrinsics, and UE5 offsets |
-| data/json_output/<dataset>/validation_report.json | Per-frame reprojection error analysis |
-| data/json_output/<dataset>/detection_summary.json | Per-frame ChArUco detection counts |
-| data/plots/<dataset>/spatial/ | Reprojection error plots and corner coverage maps |
-| data/plots/<dataset>/spatial/detection_check/ | Annotated detection images for manual review |
-| data/plots/<dataset>/spatial/diagnosis/ | Diagnostic output from diagnose_detection.py |
+| data/synced/<dataset_01>| Temporally aligned Sony and ZED frame pairs |
+|data/picked_for_alignment/<dataset_01>/ | Manually curated calibration frame pairs |
+| data/json_output/<dataset_01>/spatial_calibration.json | Intrinsics, extrinsics, and UE5 offsets |
+| data/json_output/<dataset_01>/validation_report.json | Per-frame reprojection error analysis |
+| data/json_output/<dataset_01>/detection_summary.json | Per-frame ChArUco detection counts |
+| data/plots/<dataset_01>/spatial/ | Reprojection error plots and corner coverage maps |
+| data/plots/<dataset_01>/spatial/detection_check/ | Annotated detection images for manual review |
+| data/plots/<dataset_01>/spatial/diagnosis/ | Diagnostic output from diagnose_detection.py |
