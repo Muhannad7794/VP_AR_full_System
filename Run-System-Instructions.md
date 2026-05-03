@@ -94,15 +94,26 @@ This tests all supported ArUco dictionary variants and board size combinations a
 - Enter the ue5_offset X, Y, Z values from the JSON (in centimetres).
 - The virtual camera will now track from the Sony optical centre rather than the ZED optical centre, eliminating the spatial offset between the skeleton holdout and the live-action performer.
 
-**Output Reference**
-// start a table with 2 fileds, Path, Content
-| Path | Content |
+## Output Reference
+
+| Path | Contents |
 | --- | --- |
-| data/synced/<dataset_01>| Temporally aligned Sony and ZED frame pairs |
-|data/picked_for_alignment/<dataset_01>/ | Manually curated calibration frame pairs |
-| data/json_output/<dataset_01>/spatial_calibration.json | Intrinsics, extrinsics, and UE5 offsets |
-| data/json_output/<dataset_01>/validation_report.json | Per-frame reprojection error analysis |
-| data/json_output/<dataset_01>/detection_summary.json | Per-frame ChArUco detection counts |
-| data/plots/<dataset_01>/spatial/ | Reprojection error plots and corner coverage maps |
-| data/plots/<dataset_01>/spatial/detection_check/ | Annotated detection images for manual review |
-| data/plots/<dataset_01>/spatial/diagnosis/ | Diagnostic output from diagnose_detection.py |
+| `data/extracted/<dataset>/sony_rgb/` | All raw Sony frames extracted from the MP4 |
+| `data/extracted/<dataset>/zed_rgb/` | All raw ZED left-eye frames extracted from the SVO2 |
+| `data/extracted/<dataset>/zed_depth/` | All raw 16-bit ZED depth maps |
+| `data/json_output/<dataset>/frame_mapping.json` | Raw DTW temporal alignment mapping |
+| `data/json_output/<dataset>/smoothed_frame_mapping.json` | Savitzky-Golay filtered mapping |
+| `data/plots/<dataset>/drift_comparison.jpg` | Raw vs. smoothed temporal drift graph |
+| `data/synced/<dataset>/sony_rgb/` | Temporally aligned Sony frames |
+| `data/synced/<dataset>/zed_rgb/` | Temporally aligned ZED frames |
+| `data/synced/<dataset>/zed_depth/` | Temporally aligned depth maps |
+| `data/picked_for_alignment/<dataset>/sony_rgb/` | Manually curated Sony calibration frames |
+| `data/picked_for_alignment/<dataset>/zed_rgb/` | Matching manually curated ZED calibration frames |
+| `data/json_output/<dataset>/spatial_calibration.json` | Intrinsics, extrinsics, and UE5 offsets |
+| `data/json_output/<dataset>/detection_summary.json` | Per-frame ChArUco detection counts |
+| `data/json_output/<dataset>/validation_report.json` | Per-frame reprojection error analysis |
+| `data/plots/<dataset>/spatial/reprojection_error_analysis.png` | Error distribution and per-frame bar chart |
+| `data/plots/<dataset>/spatial/corner_coverage_sony_rgb.png` | Sony corner detection density map |
+| `data/plots/<dataset>/spatial/corner_coverage_zed_rgb.png` | ZED corner detection density map |
+| `data/plots/<dataset>/spatial/detection_check/` | Annotated frames from inspect_detections.py |
+| `data/plots/<dataset>/spatial/diagnosis/` | Diagnostic output from diagnose_detection.py |
