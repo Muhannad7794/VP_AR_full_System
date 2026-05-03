@@ -21,12 +21,11 @@ services:
   align:
     build: .
     container_name: spatial_alignment
-    # Entrypoint forces this container to ALWAYS run the calibrator python script
-    # Any arguments added after 'docker compose run align' get appended to this!
-    entrypoint: ["python3", "spatial_alignment/stereo_calibrate.py"]
+    command: tail -f /dev/null
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
       - ./spatial_alignment:/VP_AR_full_System_dockerized/spatial_alignment
+      - ./run_spatial.sh:/VP_AR_full_System_dockerized/run_spatial.sh
     deploy:
       resources:
         reservations:

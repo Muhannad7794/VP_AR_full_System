@@ -4,7 +4,7 @@ scipy>=1.10.0,<1.13.0
 fastdtw
 
 # Computer Vision 
-opencv-contrib-python==4.8.0.76
+opencv-contrib-python==4.9.0.80
 
 # Deep Learning (Required for ResNet50 AI Sync)
 torch>=2.1.0 --extra-index-url https://download.pytorch.org/whl/cu121

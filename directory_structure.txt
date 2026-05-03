@@ -1,0 +1,88 @@
+/VP_AR_full_System
+│
+├── data/                                        # Ignored by Git (heavy media and outputs)
+│   │
+│   ├── raw/
+│   │   └── <dataset_name>/                      # Drop raw recordings here
+│   │       ├── *.mp4                            # Sony footage (e.g., 60 fps)
+│   │       └── *.svo2                           # ZED 2i footage (e.g., 30 fps)
+│   │
+│   ├── extracted/
+│   │   └── <dataset_name>/                      # Output of extract_frames.py
+│   │       ├── sony_rgb/                        # All raw Sony frames
+│   │       ├── zed_rgb/                         # All raw ZED left-eye frames
+│   │       └── zed_depth/                       # 16-bit ZED depth maps
+│   │
+│   ├── synced/
+│   │   └── <dataset_name>/                      # Output of compile_dataset.py
+│   │       ├── sony_rgb/                        # Temporally aligned Sony frames
+│   │       ├── zed_rgb/                         # Temporally aligned ZED frames
+│   │       └── zed_depth/                       # Temporally aligned depth maps
+│   │
+│   ├── picked_for_alignment/
+│   │   └── <dataset_name>/                      # Manually curated calibration pairs (30–50 frames)
+│   │       ├── sony_rgb/                        # Selected Sony frames (e.g., 00450.png)
+│   │       └── zed_rgb/                         # Matching ZED frames (same filename)
+│   │
+│   ├── json_output/
+│   │   └── <dataset_name>/
+│   │       ├── frame_mapping.json               # Raw DTW temporal alignment mapping
+│   │       ├── smoothed_frame_mapping.json      # Savitzky-Golay filtered mapping
+│   │       ├── spatial_calibration.json         # Intrinsics (K,D), extrinsics (R,T), UE5 offsets
+│   │       ├── detection_summary.json           # Per-frame ChArUco corner detection counts
+│   │       └── validation_report.json           # Per-frame reprojection error analysis
+│   │
+│   └── plots/
+│       └── <dataset_name>/
+│           ├── drift_comparison.jpg             # Raw vs. smoothed temporal drift graph
+│           └── spatial/
+│               ├── reprojection_error_analysis.png  # Error distribution and per-frame bars
+│               ├── corner_coverage_sony_rgb.png     # Sony corner detection density map
+│               ├── corner_coverage_zed_rgb.png      # ZED corner detection density map
+│               ├── detection_check/             # Annotated frames from inspect_detections.py
+│               │   ├── sony_<frame>.jpg         # Sony frames with detected corners drawn
+│               │   └── zed_<frame>.jpg          # ZED frames with detected corners drawn
+│               └── diagnosis/                   # Output from diagnose_detection.py
+│                   ├── <dict>_board<N>x<M>_<frame>.jpg  # Annotated successful detections
+│                   └── summary.txt              # Best configuration found
+│
+├── temporal_alignment/                          # Phase 1: Time synchronization pipeline
+│   ├── extract_frames.py                        # Extracts frames from MP4 and SVO2
+│   ├── sync_frames.py                           # Motion-energy DTW temporal alignment
+│   ├── smooth_frames_mapping.py                 # Savitzky-Golay drift correction
+│   ├── compare_mappings.py                      # Generates drift_comparison.jpg
+│   └── compile_dataset.py                       # Assembles synchronized frame pairs
+│
+├── spatial_alignment/                           # Phase 2: Spatial calibration pipeline
+│   ├── stereo_calibrate.py                      # Main calibrator: ChArUco stereo calibration
+│   │                                            #   Input:  data/picked_for_alignment/<dataset>/
+│   │                                            #   Output: data/json_output/<dataset>/spatial_calibration.json
+│   ├── inspect_detections.py                    # Pre-calibration detection check
+│   │                                            #   Annotates frames, outputs detection_summary.json
+│   ├── validate_calibration.py                  # Post-calibration reprojection error analysis
+│   │                                            #   Outputs validation_report.json and plots
+│   ├── apply_calibration.py                     # Prints UE5 LensOffset values from JSON
+│   │                                            #   Use: python3 apply_calibration.py --dataset <name> --ue5
+│   ├── diagnose_detection.py                    # Diagnostic tool: tries all ArUco dict variants
+│   │                                            #   and board sizes to identify working configuration
+│   └── preprocess_zed_frames.py                 # Optional: brightens/sharpens ZED frames before
+│                                                #   calibration (gamma correction, CLAHE, sharpening)
+│
+├── run_temporal.sh                              # One-click Phase 1 runner
+│                                                #   Usage: ./run_temporal.sh <dataset_name>
+├── run_spatial.sh                               # One-click Phase 2 runner (4-step pipeline)
+│                                                #   Usage: ./run_spatial.sh <dataset_name>
+├── docker-compose.yml                           # Two services: sync (Phase 1) and align (Phase 2)
+├── Dockerfile                                   # GPU image: OpenCV-contrib, FastDTW, PyTorch
+├── requirements.txt                             # Python dependencies
+├── Run-System-Instructions.md                   # Step-by-step usage guide
+└── README.md                                    # Full pipeline documentation
+
+---
+Board specification (calib_io_charuco_200x150_8x11_15_11_DICT_4X4, A3 print):
+  BOARD_COLS    = 11   (squares horizontally, landscape orientation)
+  BOARD_ROWS    = 8    (squares vertically)
+  squareLength  = 0.028 m  (measure actual print before calibrating)
+  markerLength  = 0.021 m
+  ArUco dict    = DICT_4X4_50
+  legacyPattern = True for Sony, auto-detect for ZED (tries both True and False per frame)

@@ -35,34 +35,72 @@ docker compose run --rm sync ./run_temporal.sh dataset_01
 - Copies the perfectly synced frames into data/synced/dataset_01/.
 
 ## 📐 Phase 2: Spatial Alignment
-Now that the cameras are matched in time, we calculate the optical math. Do not feed thousands of frames into the spatial calibrator—you only need a handful of perfect images.
+Once the cameras are matched in time, the system calculates the optical and geometric relationship between the two cameras. This is a two-step process: curating frames, then running the calibration pipeline.
 
-### 2.1 Pick The Best Frames
-Do **not** feed thousands of frames into the spatial calibrator. Feeding the algorithm too much data (especially redundant or blurry frames) will cause it to overfit, slow down, and output incorrect matrices. You only need a curated set of **30 to 50 perfect frame pairs**.
+###  2.1 Record a Calibration Dataset
+Before picking frames, record a dedicated calibration clip using the ChArUco board:
 
-**The Golden Rule:** Every frame you pick must have **zero motion blur**. The black-and-white corners of the ChArUco board must be razor-sharp.
+- Use the board printed from calib_io_charuco_200x150_8x11_15_11_DICT_4X4.pdf (A3 print, mounted flat on rigid cardboard).
+- Hold the board 0.5 m to 1.2 m from both cameras simultaneously — this is critical for ZED detection.
+- Move the board to cover all four corners of the frame, all four edges, and the center.
+- At each position, tilt the board left, right, and toward the camera (~30° angles).
+- Record for 3–4 minutes. Run Phase 1 on this recording to get synchronized frames.
 
-Open `data/synced/<dataset>/<camera_name>_rgb/` and pick frames that satisfy these four specific categories to ensure the math covers every physical extreme of the lens:
-**NOTE:** This repo uses "sony_" as a prefix for for the RGB camera framessince a Sony camera was used during development. But the same process applies regardless of your RGB camera model. You can just change
 
-* **The Edges (10 frames):** Keep the board flat and facing the camera, but pick frames where the board is pushed right up against the top, bottom, left, right edges, and the four corners of the frame. *(This maps the radial/barrel distortion of the lens).*
-* **The Angles (10 frames):** Pick frames where the board is near the center, but heavily tilted backward, tilted forward, tilted left, and tilted right. *(This calculates focal length and perspective skew).*
-* **The Depths (10 frames):** Pick 5 frames where the board is as close to the camera as possible (while still in focus and visible to both cameras), and 5 frames where the board is several meters away. *(This is critical for triangulating the Stereo X/Y/Z offset).*
-* **The Rotations (10 frames):** Pick frames where the board is flat but spun like a steering wheel clockwise and counter-clockwise. *(This eliminates tangential distortion).*
+###  2.2 Pick the Best Frames
+Do not feed thousands of frames into the spatial calibrator. The algorithm requires a curated set of 30 to 50 perfect frame pairs with geometric diversity.
+The Golden Rule: Every frame must show the ChArUco board razor-sharp with zero motion blur.
+Open data/synced/<dataset>/sony_rgb/ and select frames covering these four categories:
+
+- Edges (10 frames): Board flat and facing both cameras, positioned at the top, bottom, left, right, and four corners of the frame.
+- Angles (10 frames): Board near center but heavily tilted backward, forward, left, and right (~30°).
+- Depths (10 frames): Board at 0.5 m (close) and 1.0–1.2 m (medium), 5 frames each.
+- Rotations (10 frames): Board flat but rotated clockwise and counter-clockwise like a steering wheel.
 
 **The Copying Workflow:**
-1. Once you identify a perfect RGB frame (e.g., `00450.png`), copy it into `data/picked_for_alignment/<dataset>/<camera_name>_rgb/`.
-2. Go to the ZED folder (`data/synced/<dataset>/zed_rgb/`), find that **exact same frame number** (`00450.png`), and copy it into `data/picked_for_alignment/<dataset>/zed_rgb/`.
-3. Repeat until you have 30 to 50 perfectly matched pairs in your `picked_for_alignment` folders.
+- Identify a good Sony frame (e.g., 00450.png) and copy it to data/picked_for_alignment/<dataset>/sony_rgb/.
+- Find the exact same frame number in data/synced/<dataset>/zed_rgb/ and copy it to data/picked_for_alignment/<dataset>/zed_rgb/.
+- Repeat until you have 30–50 matched pairs in both folders.
 
-### 2.2 Run the Spatial Calibrator
-Execute the spatial alignment container, pointing it to your curated dataset
+###  2.3 Run the Spatial Calibrator
+Once you have your curated set of frames, run the spatial calibration pipeline:
 ```
-docker compose run --rm align --dataset <dataset_name>
+docker compose run --rm sync ./run_spatial.sh dataset_01
 ```
 **What This Does:**
-The script will analyze those specific frames and print four crucial matrices to your terminal:
-- ***Camera Intrinsics*** The true focal length and optical center.
-- ***Lens Distortion (D):*** The radial/tangential curvature of the glass.
-- ***Extrinsic Rotation (R):*** The pitch/yaw/roll offset of the ZED compared to the RGB camera.
-- ***Extrinsic Translation (T):*** The physical X/Y/Z offset in meters.
+- [1/4] inspect_detections.py — Runs ChArUco detection on every picked frame and saves annotated images to data/plots/<dataset>/spatial/detection_check/. Prints a per-camera detection rate. Review the annotated images and remove any frames where detection failed before proceeding.
+- [2/4] stereo_calibrate.py — Runs individual camera calibration on each camera followed by full stereo calibration. Outputs data/json_output/<dataset>/spatial_calibration.json containing:
+
+    - Intrinsic camera matrices (K) and distortion coefficients (D) for both cameras.
+    - Extrinsic rotation matrix (R) and translation vector (T) from ZED to Sony coordinate space.
+    - Ready-to-use UE5 LensOffset values in centimetres.
+
+- [3/4] validate_calibration.py — Computes per-frame reprojection errors and saves analysis plots to data/plots/<dataset>/spatial/. The overall RMS error should be below 1.0 px for good calibration. Frames above 2.0 px are flagged for removal.
+- [4/4] apply_calibration.py — Reads the calibration JSON and prints the final UE5 offset values directly to the terminal.
+
+### 2.4 Diagnostic Tools
+If detection is failing, run the diagnostic script to identify the correct board settings:
+```docker compose run --rm align python3 spatial_alignment/diagnose_detection.py --dataset dataset_01
+```
+This tests all supported ArUco dictionary variants and board size combinations and identifies the working configuration.
+
+## Phase 3: Runtime Integration in Unreal Engine 5
+- After spatial calibration is complete, apply the results in UE5:
+- Open the spatial_calibration.json output file.
+- In the UE5 level, select BP_TrackerAnchor.
+- In the Details panel, find Lens Offset → Location.
+- Enter the ue5_offset X, Y, Z values from the JSON (in centimetres).
+- The virtual camera will now track from the Sony optical centre rather than the ZED optical centre, eliminating the spatial offset between the skeleton holdout and the live-action performer.
+
+**Output Reference**
+// start a table with 2 fileds, Path, Content
+| Path | Content |
+| --- | --- |
+| data/synced/<dataset>| Temporally aligned Sony and ZED frame pairs |
+|data/picked_for_alignment/<dataset>/ | Manually curated calibration frame pairs |
+| data/json_output/<dataset>/spatial_calibration.json | Intrinsics, extrinsics, and UE5 offsets |
+| data/json_output/<dataset>/validation_report.json | Per-frame reprojection error analysis |
+| data/json_output/<dataset>/detection_summary.json | Per-frame ChArUco detection counts |
+| data/plots/<dataset>/spatial/ | Reprojection error plots and corner coverage maps |
+| data/plots/<dataset>/spatial/detection_check/ | Annotated detection images for manual review |
+| data/plots/<dataset>/spatial/diagnosis/ | Diagnostic output from diagnose_detection.py |
