@@ -13,18 +13,21 @@ echo " Starting Full Spatial Alignment Pipeline"
 echo " Dataset: $DATASET"
 echo "===================================================="
 
+# step 1: filter raw frames for high detection quality
 echo ""
-echo "[1/4] Inspecting ChArUco detections in picked frames..."
+echo "[1/5] Filtering raw frames for high detection quality..."
 python3 spatial_alignment/inspect_detections.py --dataset "$DATASET"
+if [ $? -ne 0 ]; then exit 1; fi
 
-if [ $? -ne 0 ]; then
-  echo ""
-  echo "[ERROR] Detection inspection failed."
-  exit 1
-fi
-
+# step 2: pick a diverse set of spatial candidates for calibration
 echo ""
-echo "[2/4] Running stereo calibration..."
+echo "[2/5] Picking diverse spatial candidates..."
+python3 spatial_alignment/pick_frames.py --dataset "$DATASET" --count 45
+if [ $? -ne 0 ]; then exit 1; fi
+
+# step 3: run stereo calibration to compute spatial alignment
+echo ""
+echo "[3/5] Running stereo calibration..."
 python3 spatial_alignment/stereo_calibrate.py --dataset "$DATASET"
 
 if [ $? -ne 0 ]; then
@@ -34,16 +37,18 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# step 4: validate calibration results with reprojection error analysis
 echo ""
-echo "[3/4] Validating calibration with reprojection error analysis..."
+echo "[4/5] Validating calibration with reprojection error analysis..."
 python3 spatial_alignment/validate_calibration.py --dataset "$DATASET"
 
 if [ $? -ne 0 ]; then
   echo "[WARN] Validation step failed. Check validation_report.json"
 fi
 
+# step 5: extract UE5 offset values from calibration result
 echo ""
-echo "[4/4] Extracting UE5 offset values from calibration result..."
+echo "[5/5] Extracting UE5 offset values from calibration result..."
 python3 spatial_alignment/apply_calibration.py --dataset "$DATASET" --ue5
 
 echo ""
