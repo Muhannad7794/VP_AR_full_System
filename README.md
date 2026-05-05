@@ -35,6 +35,48 @@ docker compose run --rm sync ./run_temporal.sh <dataset name>
 
 - Copies the perfectly synced frames into data/synced/<dataset name>/.
 
+**Temporal Drift Result — dataset_04:**
+
+![Drift Comparison](data/plots/dataset_04/drift_comparison.jpg)
+
+> The blue curve shows the raw frame-to-frame offset detected by DTW. The orange curve is the Savitzky-Golay smoothed mapping that is actually applied when copying synced frames. The close overlap here confirms minimal hardware clock drift in dataset_04.
+
+**Output: `frame_mapping.json`** — raw DTW alignment mapping from Sony frame index to ZED frame index:
+
+```json
+{
+  "1": 1,
+  "2": 2,
+  "3": 34,
+  "10": 41,
+  "50": 88,
+  "100": 137,
+  "500": 536,
+  "1000": 1039
+}
+```
+
+> Each key is a Sony frame number; the value is the ZED frame that was closest in visual content at that moment. Gaps or jumps (e.g., `"3": 34`) reflect hardware clock desync that DTW has corrected.
+
+**Output: `smoothed_frame_mapping.json`** — Savitzky-Golay filtered version of the same mapping:
+
+```json
+{
+  "1": 39,
+  "2": 40,
+  "3": 41,
+  "10": 48,
+  "50": 88,
+  "100": 138,
+  "500": 537,
+  "1000": 1039
+}
+```
+
+> The smoothed mapping removes high-frequency jitter from the raw DTW output. These are the ZED frame indices actually used when writing files to `data/synced/`.
+
+---
+
 ## 📐 Phase 2: Spatial Alignment
 Once the cameras are matched in time, the system calculates the optical and geometric relationship between the two cameras. This is a two-step process: curating frames, then running the calibration pipeline.
 
@@ -69,29 +111,193 @@ Once you have your curated set of frames, run the spatial calibration pipeline:
 docker compose run --rm sync ./run_spatial.sh <dataset name>
 ```
 **What This Does:**
-- [1/5] inspect_detections.py — Runs ChArUco detection on every frame. It filters the frames based on a detection threshold of 45 corners. It generate the following output directories: 
-    - data/inspected/<dataset>/sony_rgb/ => Contains the Sony frames that passed the detection thershold.
-    - data/inspected/<dataset>/zed_rgb/ => Contains the ZED frames that passed the detection thershold.
-    - data/plots/<dataset>/spatial/detection_check/ => saves annotated images with visualization of the detected corners and a label of the number of corners detected of all frames.
 
-- [2/5] stereo_calibrate.py — Runs individual camera calibration on each camera followed by full stereo calibration. Outputs data/json_output/<dataset>/spatial_calibration.json containing:
+---
 
-    - Intrinsic camera matrices (K) and distortion coefficients (D) for both cameras.
-    - Extrinsic rotation matrix (R) and translation vector (T) from ZED to Sony coordinate space.
-    - Ready-to-use UE5 LensOffset values in centimetres.
+**[1/5] `inspect_detections.py`** — Runs ChArUco detection on every frame. It filters the frames based on a detection threshold of 45 corners. It generate the following output directories:
+- data/inspected/<dataset>/sony_rgb/ => Contains the Sony frames that passed the detection thershold.
+- data/inspected/<dataset>/zed_rgb/ => Contains the ZED frames that passed the detection thershold.
+- data/plots/<dataset>/spatial/detection_check/ => saves annotated images with visualization of the detected corners and a label of the number of corners detected of all frames.
 
-- [3/5] pick_frames.py - An automation script that autmomates the selection process based on 2 criteria:
-    - Number of corners detected (threshold of 45).
-    - Spatial diversity (ensures a good spread of board positions and angles across the frame).
-    - Applies Motion filter to only include frame coupling where the movment energy is very low, ensuring the board is perfectly still and sharp in both cameras.
+**Example annotated detection frame — dataset_04:**
+
+![Detection Check Example](data/plots/dataset_04/spatial/detection_check/zed_00134.jpg)
+
+> Green dots are detected ChArUco corners. The overlay label shows the total corner count. Only frames exceeding 45 corners advance to calibration.
+
+**Output: `detection_summary.json`** — per-frame detection result for every input frame:
+
+```json
+{
+  "sony": [
+    {
+      "file": "00001.png",
+      "status": "rejected_no_markers",
+      "n_markers": 0,
+      "n_corners": 0
+    },
+    {
+      "file": "00014.png",
+      "status": "ok",
+      "n_markers": 36,
+      "n_corners": 47
+    },
+    {
+      "file": "00084.png",
+      "status": "ok",
+      "n_markers": 44,
+      "n_corners": 70
+    }
+  ],
+  "zed": [
+    {
+      "file": "00001.png",
+      "status": "rejected_no_markers",
+      "n_markers": 0,
+      "n_corners": 0
+    },
+    {
+      "file": "00014.png",
+      "status": "ok",
+      "n_markers": 31,
+      "n_corners": 52
+    }
+  ]
+}
+```
+
+> `status` is one of `"ok"` (passes threshold), `"rejected_few_corners"` (board visible but below 45 corners), or `"rejected_no_markers"` (board not found at all). In dataset_04: 2551 Sony frames passed, 2085 ZED frames passed.
+
+---
+
+**[2/5] `stereo_calibrate.py`** — Runs individual camera calibration on each camera followed by full stereo calibration. Outputs data/json_output/<dataset>/spatial_calibration.json containing:
+
+- Intrinsic camera matrices (K) and distortion coefficients (D) for both cameras.
+- Extrinsic rotation matrix (R) and translation vector (T) from ZED to Sony coordinate space.
+- Ready-to-use UE5 LensOffset values in centimetres.
+
+**Output: `spatial_calibration.json`** — full calibration result from dataset_04 (stereo RMS = **0.807 px**, 36 frame pairs used):
+
+```json
+{
+  "meta": {
+    "dataset": "dataset_04",
+    "valid_pairs_used": 36,
+    "timestamp": "2026-05-05T14:27:43"
+  },
+  "sony_camera": {
+    "camera_matrix": [
+      [1949.24,    0.0,  908.71],
+      [   0.0, 1944.20, 577.85],
+      [   0.0,    0.0,    1.0 ]
+    ],
+    "distortion_coeffs": [[-0.1058, 1.4287, 0.0021, -0.0087, -2.6126]]
+  },
+  "zed_camera": {
+    "camera_matrix": [
+      [1110.11,    0.0,  973.99],
+      [   0.0, 1110.59, 597.22],
+      [   0.0,    0.0,    1.0 ]
+    ],
+    "distortion_coeffs": [[0.0804, -0.0177, 0.0188, 0.0001, 0.3439]]
+  },
+  "extrinsics": {
+    "rotation_degrees": [-0.33, 1.94, 0.35],
+    "translation_cm":   [-7.71, -10.36, -4.11],
+    "stereo_rms_px": 0.807
+  },
+  "ue5_offset": {
+    "X_cm": -7.706,
+    "Y_cm": -10.357,
+    "Z_cm": -4.107
+  }
+}
+```
+
+> `camera_matrix` is the 3×3 intrinsic matrix K: `[fx, 0, cx; 0, fy, cy; 0, 0, 1]`. `distortion_coeffs` follow the OpenCV radial-tangential model `[k1, k2, p1, p2, k3]`. `rotation_degrees` are the Rodrigues rotation converted to Euler angles. `ue5_offset` is a direct copy of `translation_cm` ready to paste into the UE5 Details panel.
+
+---
+
+**[3/5] `pick_frames.py`** — An automation script that autmomates the selection process based on 2 criteria:
+- Number of corners detected (threshold of 45).
+- Spatial diversity (ensures a good spread of board positions and angles across the frame).
+- Applies Motion filter to only include frame coupling where the movment energy is very low, ensuring the board is perfectly still and sharp in both cameras.
+
 The script produces the following output directories:
-    - data/picked_for_alignment/<dataset>/sony_rgb/ => Contains the Sony frames that passed the detection thershold and motion filter.
-    - data/picked_for_alignment/<dataset>/zed_rgb/ => Contains the ZED frames that passed the detection thershold and motion filter. 
-    - data/plots/<dataset>/spatial/picked_for_alignment/ => saves annotated images with visualization of the detected corners and a label of the number of corners detected of all frames that passed the detection thershold and motion filter.
+- data/picked_for_alignment/<dataset>/sony_rgb/ => Contains the Sony frames that passed the detection thershold and motion filter.
+- data/picked_for_alignment/<dataset>/zed_rgb/ => Contains the ZED frames that passed the detection thershold and motion filter.
+- data/plots/<dataset>/spatial/picked_for_alignment/ => saves annotated images with visualization of the detected corners and a label of the number of corners detected of all frames that passed the detection thershold and motion filter.
 
-- [4/5] validate_calibration.py — Computes per-frame reprojection errors and saves analysis plots to data/plots/<dataset>/spatial/. The overall RMS error should be below 0.5 px for excellent calibration. RMS value under 1.8 px are considered good. Calibrations between 1,8 and 2.5 px are acceptible, and anything above 2.5 px is flagged as poor calibration that should be redone with better frames.
+**Example auto-picked frame — dataset_04:**
 
-- [5/5] apply_calibration.py — Reads the calibration JSON and prints the final UE5 offset values directly to the terminal.
+![Picked Frame Example](data/plots/dataset_04/spatial/picked_for_alignment/sony_00084.jpg)
+
+> The annotation shows the corner count and confirms the board is sharp and stationary. All 36 frames used for the final calibration in dataset_04 were selected by this script with zero manual intervention.
+
+---
+
+**[4/5] `validate_calibration.py`** — Computes per-frame reprojection errors and saves analysis plots to data/plots/<dataset>/spatial/. The overall RMS error should be below 0.5 px for excellent calibration. RMS value under 1.8 px are considered good. Calibrations between 1,8 and 2.5 px are acceptible, and anything above 2.5 px is flagged as poor calibration that should be redone with better frames.
+
+**Reprojection Error Analysis — dataset_04:**
+
+![Reprojection Error Analysis](data/plots/dataset_04/spatial/reprojection_error_analysis.png)
+
+> Per-frame mean reprojection error (bar chart) and the overall error distribution (histogram). Dataset_04 achieved a mean of **1.71 px** with no bad frames (0 frames above 2.5 px threshold) — rated **"Good"**.
+
+**Corner Coverage Heatmaps — dataset_04:**
+
+| Sony Camera | ZED Camera |
+|:-----------:|:----------:|
+| ![Sony Corner Coverage](data/plots/dataset_04/spatial/corner_coverage_sony_rgb.png) | ![ZED Corner Coverage](data/plots/dataset_04/spatial/corner_coverage_zed_rgb.png) |
+
+> These density maps show where ChArUco corners were detected across the image plane. Good spatial coverage (corners distributed across the full frame area) is essential for a well-conditioned calibration. Dataset_04 shows strong coverage across the full sensor area for both cameras.
+
+**Output: `validation_report.json`** — summary statistics and per-frame breakdown:
+
+```json
+{
+  "dataset": "dataset_04",
+  "n_frames_validated": 36,
+  "overall_mean_px": 1.713,
+  "overall_std_px": 0.981,
+  "percentile_95_px": 3.509,
+  "frames_good": 14,
+  "frames_warn": 19,
+  "frames_bad": 0,
+  "bad_frame_names": [],
+  "assessment": "Good",
+  "per_frame": [
+    {
+      "frame_pair": ["00084.png", "00084.png"],
+      "n_corners": 70,
+      "mean_error_px": 1.245,
+      "max_error_px": 3.110,
+      "std_error_px": 0.718,
+      "errors_px": [0.404, 0.382, 0.406, 0.376, "..."]
+    }
+  ]
+}
+```
+
+> `frames_good` = mean error < 1.0 px. `frames_warn` = between 1.0 and 2.5 px. `frames_bad` = above 2.5 px (triggers a redo warning). `errors_px` lists the per-corner reprojection error for every detected corner in that frame pair.
+
+---
+
+**[5/5] `apply_calibration.py`** — Reads the calibration JSON and prints the final UE5 offset values directly to the terminal.
+
+The terminal output mirrors the `ue5_offset` block from `spatial_calibration.json`:
+
+```json
+{
+  "ue5_offset": {
+    "X_cm": -7.706,
+    "Y_cm": -10.357,
+    "Z_cm": -4.107
+  }
+}
+```
+
+> Enter these values directly into the UE5 Details panel under `BP_TrackerAnchor → Lens Offset → Location`. No unit conversion needed — the system outputs centimetres, which is the native unit UE5 expects for this field.
 
 ### 2.4 Diagnostic Tools
 If detection is failing, run the diagnostic script to identify the correct board settings:
