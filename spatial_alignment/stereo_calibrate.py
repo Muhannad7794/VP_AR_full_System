@@ -123,8 +123,11 @@ def collect_valid_pairs(sony_dir: str, zed_dir: str) -> dict:
             s_ids.flatten(), z_ids.flatten(), return_indices=True
         )
 
-        if len(common_ids) < 6:
+        if len(common_ids) < 45:  # STRICT MATCHING THRESHOLD
             rejected += 1
+            print(
+                f"  [{i+1:03d}] REJECTED – Only {len(common_ids)} matched corners (Needs 45)"
+            )
             continue
 
         all_board_corners = sony_board.getChessboardCorners()
@@ -149,7 +152,7 @@ def calibrate_single_camera(
 ) -> tuple:
     print(f"\n[INFO] Calibrating {name} camera …")
     rms, K, D, rvecs, tvecs = cv2.calibrateCamera(
-        obj_points, img_points, image_size, None, None, flags=cv2.CALIB_RATIONAL_MODEL
+        obj_points, img_points, image_size, None, None, flags=0
     )
     print(f"  RMS reprojection error ({name}): {rms:.4f} px")
     return K, D, rms, rvecs, tvecs
@@ -259,6 +262,13 @@ def main():
 
     print(f"\n{'='*60}\n  Spatial Calibration – dataset: {args.dataset}\n{'='*60}\n")
     data = collect_valid_pairs(paths["sony_rgb"], paths["zed_rgb"])
+
+    # Abort logic if too few valid pairs found
+    if len(data["obj_points"]) < 5:
+        print(
+            f"\n[ERROR] Not enough valid pairs for calibration. Found {len(data['obj_points'])} pairs with at least 45 matched corners."
+        )
+        sys.exit(1)
 
     K_sony, D_sony, rms_sony, _, _ = calibrate_single_camera(
         data["obj_points"], data["sony_corners"], data["sony_image_size"], "Sony"
