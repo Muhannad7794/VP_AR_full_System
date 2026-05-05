@@ -1,26 +1,137 @@
-# Kinematic AR: Modulating Virtual Production Elements via Embodied Movement Qualities
----
+# How to Control the System using CMD
 
-## Main Reference Review:
-**Caramiaux et al. (2015) "Towards a Movement Quality Framework for Interactive Systems" (MOCO)**
-This paper presents a theoretical and computational framework for capturing and utilizing "Movement Qualities" rather than raw biomechanical kinematics. Philosophically, it aligns with Embodied Interaction by treating the human body not just as a geometric cursor, but as an expressive entity. Its relevance to this project lies in its methodology for abstracting raw sensor data (which in my case is the ZED camera's 3D skeletal tracking) into higher-level descriptors like effort, speed, and fluidity. By applying this philosophy, my Virtual Production hybrid system shifts from a tool that merely "sees" where an actor is, to an embodied interface that "feels" how an actor moves, allowing the Augmented Reality environment to react contextually to human expression.
+## 🚀 Getting Started
 
-## Implementation Idea & Description
-In a standard Virtual Production LED volume, interacting with foreground AR elements often feels rigid. Using the ZED camera's skeletal tracking (via Blueprint/C++ in Unreal Engine 5), I am capturing the real-time joint data of the user.
-To adhere to the EI principle of avoiding direct 1:1 mapping, the implementation calculates specific movement descriptors:
+**Step 1: Build the Environment**
 
-### Velocity & Acceleration (Time/Effort):
-Calculating the delta of joint positions over time to determine if a movement is "Sudden" or "Sustained."
+Clone this repository to your local machine, open your terminal in the root folder, and build the GPU-accelerated Docker container. This only needs to be done once.
 
-### Spatial Expansiveness (Space):
-Calculating the bounding volume of the tracked skeleton to determine if the posture is contracted or expanded.
+```
+docker compose build --no-cache
+```
+**Step 2: Prepare Your Raw Data**
+1. Create a new folder inside data/raw/ with a descriptive name for your recording session (e.g., <dataset name>).
 
-These descriptors are then piped into Unreal Engine's Niagara particle system or AR physics volume. High-energy, sudden movements repel or agitate the virtual objects, while sustained, slow movements attract or calm them, establishing a continuous action-perception loop between the physical body and the hybrid XR environment.
+2. Drop your raw video files into that folder:
+- One mp4 file.
+- One svo file.
 
-## Code Snippets:
-(Placeholder).
+## ⏱️ Phase 1: Temporal Alignment
+Once your raw files are in place, run the entire extraction and syncing pipeline with a single command.
 
-## Additional References:
-Loke, L., & Robertson, T. (2013). Moving and making methodologies in HCI: The Feldenkrais framework. ACM Transactions on Computer-Human Interaction (TOCHI).
+Replace <dataset name> with the exact name of your folder:
 
-Stereolabs ZED SDK Documentation (Skeletal Tracking API)
+```
+docker compose run --rm sync ./run_temporal.sh <dataset name>
+```
+**What This Does:**
+- Extracts the ZED video completely, then extracts the RGB video completely.
+
+- Analyzes every frame using a ResNet50 neural network.
+
+- Aligns the frames in time using Dynamic Time Warping (DTW).
+
+- Smooths any hardware clock drift via Savitzky-Golay filtering.
+
+- Copies the perfectly synced frames into data/synced/<dataset name>/.
+
+## 📐 Phase 2: Spatial Alignment
+Once the cameras are matched in time, the system calculates the optical and geometric relationship between the two cameras. This is a two-step process: curating frames, then running the calibration pipeline.
+
+###  2.1 Record a Calibration Dataset
+Before picking frames, record a dedicated calibration clip using the ChArUco board:
+
+- Use the board printed from calib_io_charuco_200x150_8x11_15_11_DICT_4X4.pdf (A3 print, mounted flat on rigid cardboard).
+- Hold the board 0.5 m to 1.2 m from both cameras simultaneously — this is critical for ZED detection.
+- Move the board to cover all four corners of the frame, all four edges, and the center.
+- At each position, tilt the board left, right, and toward the camera (~30° angles).
+- Record for 3–4 minutes. Run Phase 1 on this recording to get synchronized frames.
+
+
+###  2.2 Pick the Best Frames
+Do not feed thousands of frames into the spatial calibrator. The algorithm requires a curated set of 30 to 50 perfect frame pairs with geometric diversity.
+The Golden Rule: Every frame must show the ChArUco board razor-sharp with zero motion blur.
+Open data/synced/<dataset>/sony_rgb/ and select frames covering these four categories:
+
+- Edges (10 frames): Board flat and facing both cameras, positioned at the top, bottom, left, right, and four corners of the frame.
+- Angles (10 frames): Board near center but heavily tilted backward, forward, left, and right (~30°).
+- Depths (10 frames): Board at 0.5 m (close) and 1.0–1.2 m (medium), 5 frames each.
+- Rotations (10 frames): Board flat but rotated clockwise and counter-clockwise like a steering wheel.
+
+**The Copying Workflow:**
+- Identify a good Sony frame (e.g., 00450.png) and copy it to data/picked_for_alignment/<dataset>/sony_rgb/.
+- Find the exact same frame number in data/synced/<dataset>/zed_rgb/ and copy it to data/picked_for_alignment/<dataset>/zed_rgb/.
+- Repeat until you have 30–50 matched pairs in both folders.
+
+###  2.3 Run the Spatial Calibrator
+Once you have your curated set of frames, run the spatial calibration pipeline:
+```
+docker compose run --rm sync ./run_spatial.sh <dataset name>
+```
+**What This Does:**
+- [1/5] inspect_detections.py — Runs ChArUco detection on every frame. It filters the frames based on a detection threshold of 45 corners. It generate the following output directories: 
+    - data/inspected/<dataset>/sony_rgb/ => Contains the Sony frames that passed the detection thershold.
+    - data/inspected/<dataset>/zed_rgb/ => Contains the ZED frames that passed the detection thershold.
+    - data/plots/<dataset>/spatial/detection_check/ => saves annotated images with visualization of the detected corners and a label of the number of corners detected of all frames.
+
+- [2/5] stereo_calibrate.py — Runs individual camera calibration on each camera followed by full stereo calibration. Outputs data/json_output/<dataset>/spatial_calibration.json containing:
+
+    - Intrinsic camera matrices (K) and distortion coefficients (D) for both cameras.
+    - Extrinsic rotation matrix (R) and translation vector (T) from ZED to Sony coordinate space.
+    - Ready-to-use UE5 LensOffset values in centimetres.
+
+- [3/5] pick_frames.py - An automation script that autmomates the selection process based on 2 criteria:
+    - Number of corners detected (threshold of 45).
+    - Spatial diversity (ensures a good spread of board positions and angles across the frame).
+    - Applies Motion filter to only include frame coupling where the movment energy is very low, ensuring the board is perfectly still and sharp in both cameras.
+The script produces the following output directories:
+    - data/picked_for_alignment/<dataset>/sony_rgb/ => Contains the Sony frames that passed the detection thershold and motion filter.
+    - data/picked_for_alignment/<dataset>/zed_rgb/ => Contains the ZED frames that passed the detection thershold and motion filter. 
+    - data/plots/<dataset>/spatial/picked_for_alignment/ => saves annotated images with visualization of the detected corners and a label of the number of corners detected of all frames that passed the detection thershold and motion filter.
+
+- [4/5] validate_calibration.py — Computes per-frame reprojection errors and saves analysis plots to data/plots/<dataset>/spatial/. The overall RMS error should be below 0.5 px for excellent calibration. RMS value under 1.8 px are considered good. Calibrations between 1,8 and 2.5 px are acceptible, and anything above 2.5 px is flagged as poor calibration that should be redone with better frames.
+
+- [5/5] apply_calibration.py — Reads the calibration JSON and prints the final UE5 offset values directly to the terminal.
+
+### 2.4 Diagnostic Tools
+If detection is failing, run the diagnostic script to identify the correct board settings:
+```
+docker compose run --rm align python3 spatial_alignment/diagnose_detection.py --dataset <dataset name>
+```
+This tests all supported ArUco dictionary variants and board size combinations and identifies the working configuration.
+
+## Phase 3: Runtime Integration in Unreal Engine 5
+- After spatial calibration is complete, apply the results in UE5:
+- Open the spatial_calibration.json output file.
+- In the UE5 level, select BP_TrackerAnchor.
+- In the Details panel, find Lens Offset → Location.
+- Enter the ue5_offset X, Y, Z values from the JSON (in centimetres).
+- The virtual camera will now track from the Sony optical centre rather than the ZED optical centre, eliminating the spatial offset between the skeleton holdout and the live-action performer.
+
+## Output Reference
+
+| Path | Contents |
+| --- | --- |
+| `data/extracted/<dataset>/sony_rgb/` | All raw Sony frames extracted from the MP4 |
+| `data/extracted/<dataset>/zed_rgb/` | All raw ZED left-eye frames extracted from the SVO2 |
+| `data/extracted/<dataset>/zed_depth/` | All raw 16-bit ZED depth maps |
+| `data/json_output/<dataset>/frame_mapping.json` | Temporal alignment mapping based on similarity algorithm and DTW |
+| `data/json_output/<dataset>/smoothed_frame_mapping.json` | Savitzky-Golay filtered mapping |
+| `data/plots/<dataset>/drift_comparison.jpg` | Raw vs. smoothed temporal drift graph |
+| `data/synced/<dataset>/sony_rgb/` | Temporally aligned Sony frames |
+| `data/synced/<dataset>/zed_rgb/` | Temporally aligned ZED frames |
+| `data/synced/<dataset>/zed_depth/` | Temporally aligned depth maps |
+| `data/inspected/<dataset>/sony_rgb/` | Sony frames that passed the ChArUco detection threshold |
+| `data/inspected/<dataset>/zed_rgb/` | ZED frames that passed the ChArUco detection threshold |
+| `data/plots/<dataset>/spatial/detection_check/` | Annotated frames with detected corners and counts |
+| `data/plots/<dataset>/spatial/picked_for_alignment/` | Annotated frames that passed both detection and motion filters |
+| `data/picked_for_alignment/<dataset>/sony_rgb/` | Manually curated Sony calibration frames |
+| `data/picked_for_alignment/<dataset>/zed_rgb/` | Matching manually curated ZED calibration frames |
+| `data/json_output/<dataset>/spatial_calibration.json` | Intrinsics, extrinsics, and UE5 offsets |
+| `data/json_output/<dataset>/detection_summary.json` | Per-frame ChArUco detection counts |
+| `data/json_output/<dataset>/validation_report.json` | Per-frame reprojection error analysis |
+| `data/plots/<dataset>/spatial/reprojection_error_analysis.png` | Error distribution and per-frame bar chart |
+| `data/plots/<dataset>/spatial/corner_coverage_sony_rgb.png` | Sony corner detection density map |
+| `data/plots/<dataset>/spatial/corner_coverage_zed_rgb.png` | ZED corner detection density map |
+| `data/plots/<dataset>/spatial/detection_check/` | Annotated frames from inspect_detections.py |
+| `data/plots/<dataset>/spatial/diagnosis/` | Diagnostic output from diagnose_detection.py |
