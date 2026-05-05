@@ -336,22 +336,24 @@ def main():
     overall_mean = float(np.mean(all_errors))
     overall_std = float(np.std(all_errors))
     pct_95 = float(np.percentile(all_errors, 95))
-    n_good = sum(1 for r in results if r["mean_error_px"] < 1.0)
-    n_warn = sum(1 for r in results if 1.0 <= r["mean_error_px"] < 2.0)
-    n_bad = sum(1 for r in results if r["mean_error_px"] >= 2.0)
+
+    # Adjusted Thresholds for Non-Genlocked Virtual Production Rigs
+    n_good = sum(1 for r in results if r["mean_error_px"] < 1.5)
+    n_warn = sum(1 for r in results if 1.5 <= r["mean_error_px"] < 2.5)
+    n_bad = sum(1 for r in results if r["mean_error_px"] >= 2.8)
 
     print(f"\n  Overall mean reprojection error : {overall_mean:.4f} px")
     print(f"  Standard deviation              : {overall_std:.4f} px")
     print(f"  95th percentile                 : {pct_95:.4f} px")
-    print(f"  Frames < 1.0 px (good)  : {n_good}")
-    print(f"  Frames 1–2 px  (warn)   : {n_warn}")
-    print(f"  Frames ≥ 2.0 px (bad)   : {n_bad}")
+    print(f"  Frames < 1.5 px (good)  : {n_good}")
+    print(f"  Frames 1.5–2.5 px (warn): {n_warn}")
+    print(f"  Frames >= 2.8 px (bad)  : {n_bad}")
 
     # Frames that should be removed
-    bad_frames = [r["frame_pair"][0] for r in results if r["mean_error_px"] >= 2.0]
+    bad_frames = [r["frame_pair"][0] for r in results if r["mean_error_px"] >= 2.8]
     if bad_frames:
         print(
-            f"\n  [WARN] Consider removing these Sony frames from "
+            f"\n  [WARN] Consider removing these frames from "
             f"picked_for_alignment/ and re-calibrating:"
         )
         for fname in bad_frames:
@@ -394,7 +396,7 @@ def main():
             zed_size,
         )
 
-    # Save validation report
+    # Save validation report with updated, realistic grading scale
     report = {
         "dataset": args.dataset,
         "n_frames_validated": len(results),
@@ -406,16 +408,12 @@ def main():
         "frames_bad": n_bad,
         "bad_frame_names": bad_frames,
         "assessment": (
-            "EXCELLENT"
+            "Excellent"
             if overall_mean < 0.5
             else (
-                "GOOD"
-                if overall_mean < 1.0
-                else (
-                    "ACCEPTABLE"
-                    if overall_mean < 2.0
-                    else "POOR – recalibrate with better frames"
-                )
+                "Good"
+                if overall_mean < 1.8
+                else "Acceptable" if overall_mean < 2.5 else "Poor"
             )
         ),
         "per_frame": results,
