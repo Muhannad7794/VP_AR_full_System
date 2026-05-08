@@ -121,9 +121,9 @@ docker compose run --rm sync ./run_spatial.sh <dataset name>
 
 **Example annotated detection frame — dataset_04:**
 
-![Detection Check Example](data/plots/dataset_04/spatial/detection_check/zed_00134.jpg)
+![Detection Check Example](data/plots/dataset_04/spatial/detection_check/zed_02139.jpg)
 
-> Green dots are detected ChArUco corners. The overlay label shows the total corner count. Only frames exceeding 45 corners advance to calibration.
+> The detection script is responsible for detecting and counting the ChArUco corners on the board in each frame. The overlay label shows the total corner count. Only frames exceeding 45 corners advance to calibration.
 
 **Output: `detection_summary.json`** — per-frame detection result for every input frame:
 
@@ -151,10 +151,10 @@ docker compose run --rm sync ./run_spatial.sh <dataset name>
   ],
   "zed": [
     {
-      "file": "00001.png",
-      "status": "rejected_no_markers",
-      "n_markers": 0,
-      "n_corners": 0
+      "file": "02139.png",
+      "status": "rejected_few_markers",
+      "n_markers": 31,
+      "n_corners": 34
     },
     {
       "file": "00014.png",
@@ -166,8 +166,7 @@ docker compose run --rm sync ./run_spatial.sh <dataset name>
 }
 ```
 
-> `status` is one of `"ok"` (passes threshold), `"rejected_few_corners"` (board visible but below 45 corners), or `"rejected_no_markers"` (board not found at all). In dataset_04: 2551 Sony frames passed, 2085 ZED frames passed.
-
+> `status` is one of `"ok"` (passes threshold), `"rejected_few_corners"` (board visible but below 45 corners), or `"rejected_no_markers"` (No markers found at all).
 ---
 
 **[2/5] `stereo_calibrate.py`** — Runs individual camera calibration on each camera followed by full stereo calibration. Outputs data/json_output/<dataset>/spatial_calibration.json containing:
@@ -176,7 +175,7 @@ docker compose run --rm sync ./run_spatial.sh <dataset name>
 - Extrinsic rotation matrix (R) and translation vector (T) from ZED to Sony coordinate space.
 - Ready-to-use UE5 LensOffset values in centimetres.
 
-**Output: `spatial_calibration.json`** — full calibration result from dataset_04 (stereo RMS = **0.807 px**, 36 frame pairs used):
+**Output: `spatial_calibration.json`** —  Shows the full calibration result in this format:
 
 ```json
 {
@@ -224,19 +223,18 @@ docker compose run --rm sync ./run_spatial.sh <dataset name>
 - Applies Motion filter to only include frame coupling where the movment energy is very low, ensuring the board is perfectly still and sharp in both cameras.
 
 The script produces the following output directories:
-- data/picked_for_alignment/<dataset>/sony_rgb/ => Contains the Sony frames that passed the detection thershold and motion filter.
-- data/picked_for_alignment/<dataset>/zed_rgb/ => Contains the ZED frames that passed the detection thershold and motion filter.
-- data/plots/<dataset>/spatial/picked_for_alignment/ => saves annotated images with visualization of the detected corners and a label of the number of corners detected of all frames that passed the detection thershold and motion filter.
+- data/picked_for_alignment/<dataset_name>//sony_rgb/ => Contains the Sony frames that passed the detection thershold and motion filter.
+- data/picked_for_alignment/<dataset_name>/zed_rgb/ => Contains the ZED frames that passed the detection thershold and motion filter.
+- data/plots/<dataset_name>/spatial/picked_for_alignment/ => saves annotated images with visualization of the detected corners and a label of the number of corners detected of all frames that passed the detection thershold and motion filter.
 
 **Example auto-picked frame — dataset_04:**
 
 ![Picked Frame Example](data/plots/dataset_04/spatial/picked_for_alignment/sony_00084.jpg)
 
-> The annotation shows the corner count and confirms the board is sharp and stationary. All 36 frames used for the final calibration in dataset_04 were selected by this script with zero manual intervention.
-
+> The annotation shows the corner count and confirms the board is sharp and stationary, with all 70 corners detected. This makes this frame example vaible to enter the calibration process.
 ---
 
-**[4/5] `validate_calibration.py`** — Computes per-frame reprojection errors and saves analysis plots to data/plots/<dataset>/spatial/. The overall RMS error should be below 0.5 px for excellent calibration. RMS value under 1.8 px are considered good. Calibrations between 1,8 and 2.5 px are acceptible, and anything above 2.5 px is flagged as poor calibration that should be redone with better frames.
+**[4/5] `validate_calibration.py`** — Computes per-frame reprojection errors and saves analysis plots to data/plots/<dataset_name>/spatial/. The overall RMS error should be below 0.5 px for excellent calibration. RMS value under 1.8 px are considered good. Calibrations between 1,8 and 2.5 px are acceptible, and anything above 2.5 px is flagged as poor calibration that should be redone with better frames.
 
 **Reprojection Error Analysis — dataset_04:**
 
@@ -244,7 +242,7 @@ The script produces the following output directories:
 
 > Per-frame mean reprojection error (bar chart) and the overall error distribution (histogram). Dataset_04 achieved a mean of **1.71 px** with no bad frames (0 frames above 2.5 px threshold) — rated **"Good"**.
 
-**Corner Coverage Heatmaps — dataset_04:**
+**Corner Coverage Heatmaps:**
 
 | Sony Camera | ZED Camera |
 |:-----------:|:----------:|
@@ -297,19 +295,20 @@ The terminal output mirrors the `ue5_offset` block from `spatial_calibration.jso
 }
 ```
 
-> Enter these values directly into the UE5 Details panel under `BP_TrackerAnchor → Lens Offset → Location`. No unit conversion needed — the system outputs centimetres, which is the native unit UE5 expects for this field.
+> Tthese values can beplugged directly into the UE5 CineCamera actor so the FOV and viewing output exactly matches the physical camera. No unit conversion needed — the system outputs centimetres, which is the native unit UE5 expects for this field.
 
 ### 2.4 Diagnostic Tools
-If detection is failing, run the diagnostic script to identify the correct board settings:
+To validate the calibration, a custom validation pipeline is made to evaluate the calibration quality and point out any potentail issues.
+The pipleine can be run with the following command:
 ```
 docker compose run --rm align python3 spatial_alignment/diagnose_detection.py --dataset <dataset name>
 ```
 This tests all supported ArUco dictionary variants and board size combinations and identifies the working configuration.
 
 ## Phase 3: Runtime Integration in Unreal Engine 5
-- After spatial calibration is complete, apply the results in UE5:
+- After spatial calibration is complete, the results are ready to be applied in UE5 as follows:
 - Open the spatial_calibration.json output file.
-- In the UE5 level, select BP_TrackerAnchor.
+- In the UE5 level, select the actor recieving the Live Link tracking data `BP_TrackerAnchor`.
 - In the Details panel, find Lens Offset → Location.
 - Enter the ue5_offset X, Y, Z values from the JSON (in centimetres).
 - The virtual camera will now track from the Sony optical centre rather than the ZED optical centre, eliminating the spatial offset between the skeleton holdout and the live-action performer.
