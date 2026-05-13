@@ -22,7 +22,8 @@ echo "================================================================="
 
 # Check if extraction was successful before proceeding to validation
 if [ $? -eq 0 ]; then
-    python3 /VP_AR_full_System_dockerized/skeleton_filtering/validate_kinematics.py --dataset "$DATASET"
+    # Inside run_filtering.sh
+    python3 /VP_AR_full_System_dockerized/skeleton_filtering/validate_kinematics.py --dataset "$DATASET" "$2" "$3" "$4" "$5"
     
     if [ $? -eq 0 ]; then
         echo "================================================================="

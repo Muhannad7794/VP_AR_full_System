@@ -2,7 +2,8 @@
 Validates the kinematic noise reduction and LMA metric extraction.
 Applies the 1 Euro Filter to raw 3D coordinates and computes the LMA
 Expansiveness proxy (maximum distal distance to spine).
-Generates comparative visual plots for architectural documentation.
+Features modular arguments to specify the target joint and axis for
+geometric noise reduction analysis.
 """
 
 import os
@@ -20,6 +21,20 @@ def parse_arguments():
     parser.add_argument(
         "--dataset", type=str, required=True, help="Target dataset directory name."
     )
+    parser.add_argument(
+        "--joint",
+        type=str,
+        default="r_wrist",
+        choices=["l_wrist", "r_wrist", "spine"],
+        help="Target joint for noise analysis.",
+    )
+    parser.add_argument(
+        "--axis",
+        type=str,
+        default="x",
+        choices=["x", "y", "z"],
+        help="Target spatial axis for noise analysis.",
+    )
     return parser.parse_args()
 
 
@@ -31,6 +46,10 @@ def calculate_distance(p1, p2):
 def main():
     args = parse_arguments()
     dataset = args.dataset
+    target_joint = args.joint
+    target_axis = args.axis
+    target_col = f"{target_joint}_{target_axis}"
+    filtered_col = f"{target_col}_filtered"
 
     # Define paths
     input_csv = os.path.join(
@@ -52,6 +71,10 @@ def main():
     # Load data
     df = pd.read_csv(input_csv)
 
+    if target_col not in df.columns:
+        print(f"ERROR: Column {target_col} not found in the dataset.")
+        return
+
     # Simulation Parameters (30 Hz ZED recording)
     fps = 30.0
     dt = 1.0 / fps
@@ -61,26 +84,26 @@ def main():
     min_cutoff = 1.0  # Aggressive low-pass for 10-20mm idle positional noise
     beta = 0.05  # Speed coefficient to preserve ballistic movement
 
-    # Initialize independent filters for Right Wrist X coordinate (as an example plot)
+    # Initialize independent filter for the dynamically selected target
     t0 = timestamps.iloc[0]
-    filter_x = OneEuroFilter(
-        t0, df["r_wrist_x"].iloc[0], min_cutoff=min_cutoff, beta=beta
+    filter_target = OneEuroFilter(
+        t0, df[target_col].iloc[0], min_cutoff=min_cutoff, beta=beta
     )
 
-    filtered_x = []
+    filtered_target_data = []
     expansiveness_raw = []
 
-    print("Applying adaptive filtering and computing LMA metrics...")
+    print(f"Applying adaptive filtering to {target_col} and computing LMA metrics...")
 
     for i in range(len(df)):
         t = timestamps.iloc[i]
 
-        # Hardware Noise Filtering validation (Right Wrist X-axis)
-        raw_x = df["r_wrist_x"].iloc[i]
-        f_x = filter_x(t, raw_x)
-        filtered_x.append(f_x)
+        # Hardware Noise Filtering validation (Target Axis)
+        raw_val = df[target_col].iloc[i]
+        f_val = filter_target(t, raw_val)
+        filtered_target_data.append(f_val)
 
-        # LMA Expansiveness Calculation (Spatial Proxy)
+        # LMA Expansiveness Calculation (Spatial Proxy - requires full 3D data)
         spine = np.array(
             [df["spine_x"].iloc[i], df["spine_y"].iloc[i], df["spine_z"].iloc[i]]
         )
@@ -97,16 +120,19 @@ def main():
         # Expansiveness defined as the maximum boundary of the kinesphere
         expansiveness_raw.append(max(dist_l, dist_r))
 
-    df["r_wrist_x_filtered"] = filtered_x
+    df[filtered_col] = filtered_target_data
     df["expansiveness_raw"] = expansiveness_raw
 
     # ==========================================
     # Plot 1: Geometric Noise Reduction
     # ==========================================
+    joint_display_name = target_joint.replace("_", " ").title()
+    axis_display_name = target_axis.upper()
+
     plt.figure(figsize=(12, 6))
     plt.plot(
         timestamps,
-        df["r_wrist_x"],
+        df[target_col],
         label="Raw ZED SDK Output",
         color="red",
         alpha=0.4,
@@ -114,18 +140,22 @@ def main():
     )
     plt.plot(
         timestamps,
-        df["r_wrist_x_filtered"],
+        df[filtered_col],
         label="1 Euro Filter Output",
         color="blue",
         linewidth=1.5,
     )
-    plt.title("Geometric Sensor Noise Reduction (Right Wrist X-Axis)")
+    plt.title(
+        f"Geometric Sensor Noise Reduction ({joint_display_name} {axis_display_name}-Axis)"
+    )
     plt.xlabel("Time (Seconds)")
     plt.ylabel("World Coordinate (mm)")
     plt.legend()
     plt.grid(True, linestyle="--", alpha=0.6)
     plt.tight_layout()
-    noise_plot_path = os.path.join(plot_dir, "1Euro_noise_reduction.png")
+    noise_plot_path = os.path.join(
+        plot_dir, f"1Euro_noise_reduction_{target_joint}_{target_axis}.png"
+    )
     plt.savefig(noise_plot_path, dpi=300)
     plt.close()
 
