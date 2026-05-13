@@ -1,9 +1,8 @@
 """
-Validates the kinematic noise reduction and LMA metric extraction.
-Applies the 1 Euro Filter to raw 3D coordinates and computes the LMA
-Expansiveness proxy (maximum distal distance to spine).
-Features modular arguments to specify the target joint and axis for
-geometric noise reduction analysis.
+Validates kinematic noise reduction and LMA metric extraction across all 38 joints.
+Applies the 1 Euro Filter to raw 3D coordinates based on dynamic CLI parameters.
+Computes the LMA Expansiveness proxy utilizing the core spatial bounding
+volume (maximum distance from spine_2 to distal wrists).
 """
 
 import os
@@ -13,10 +12,51 @@ import numpy as np
 import matplotlib.pyplot as plt
 from one_euro_filter import OneEuroFilter
 
+JOINTS_38 = [
+    "pelvis",
+    "spine_1",
+    "spine_2",
+    "spine_3",
+    "neck",
+    "nose",
+    "left_eye",
+    "right_eye",
+    "left_ear",
+    "right_ear",
+    "left_clavicle",
+    "right_clavicle",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle",
+    "left_big_toe",
+    "right_big_toe",
+    "left_small_toe",
+    "right_small_toe",
+    "left_heel",
+    "right_heel",
+    "left_hand_thumb_4",
+    "right_hand_thumb_4",
+    "left_hand_index_1",
+    "right_hand_index_1",
+    "left_hand_middle_4",
+    "right_hand_middle_4",
+    "left_hand_pinky_1",
+    "right_hand_pinky_1",
+]
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Validate kinematics and generate LMA plots."
+        description="Validate comprehensive 38-joint kinematics."
     )
     parser.add_argument(
         "--dataset", type=str, required=True, help="Target dataset directory name."
@@ -24,8 +64,8 @@ def parse_arguments():
     parser.add_argument(
         "--joint",
         type=str,
-        default="r_wrist",
-        choices=["l_wrist", "r_wrist", "spine"],
+        default="right_wrist",
+        choices=JOINTS_38,
         help="Target joint for noise analysis.",
     )
     parser.add_argument(
@@ -51,7 +91,6 @@ def main():
     target_col = f"{target_joint}_{target_axis}"
     filtered_col = f"{target_col}_filtered"
 
-    # Define paths
     input_csv = os.path.join(
         "/VP_AR_full_System_dockerized/data",
         "extracted",
@@ -65,26 +104,28 @@ def main():
     os.makedirs(plot_dir, exist_ok=True)
 
     if not os.path.exists(input_csv):
-        print(f"ERROR: Kinematic data not found at {input_csv}")
+        print(
+            f"ERROR: Kinematic data not found at {input_csv}. Re-run extraction pipeline."
+        )
         return
 
-    # Load data
     df = pd.read_csv(input_csv)
 
     if target_col not in df.columns:
-        print(f"ERROR: Column {target_col} not found in the dataset.")
+        print(
+            f"ERROR: Target column {target_col} missing. Dataset may contain legacy extraction schema."
+        )
         return
 
-    # Simulation Parameters (30 Hz ZED recording)
+    # Simulation Parameters (30 Hz)
     fps = 30.0
     dt = 1.0 / fps
     timestamps = df["frame_idx"] * dt
 
-    # 1 Euro Filter Hardware Tuning Parameters (Stereolab ZED 2i baseline)
-    min_cutoff = 1.0  # Aggressive low-pass for 10-20mm idle positional noise
-    beta = 0.05  # Speed coefficient to preserve ballistic movement
+    # 1 Euro Filter Hardware Tuning Parameters
+    min_cutoff = 1.0
+    beta = 0.05
 
-    # Initialize independent filter for the dynamically selected target
     t0 = timestamps.iloc[0]
     filter_target = OneEuroFilter(
         t0, df[target_col].iloc[0], min_cutoff=min_cutoff, beta=beta
@@ -93,38 +134,45 @@ def main():
     filtered_target_data = []
     expansiveness_raw = []
 
-    print(f"Applying adaptive filtering to {target_col} and computing LMA metrics...")
+    print(f"Processing 1 Euro filter for {target_col} and generating LMA metrics...")
 
     for i in range(len(df)):
         t = timestamps.iloc[i]
 
-        # Hardware Noise Filtering validation (Target Axis)
+        # 1. Target Joint Filtering
         raw_val = df[target_col].iloc[i]
         f_val = filter_target(t, raw_val)
         filtered_target_data.append(f_val)
 
-        # LMA Expansiveness Calculation (Spatial Proxy - requires full 3D data)
+        # 2. LMA Expansiveness Calculation (Strictly uses spine_2, left_wrist, right_wrist)
         spine = np.array(
-            [df["spine_x"].iloc[i], df["spine_y"].iloc[i], df["spine_z"].iloc[i]]
+            [df["spine_2_x"].iloc[i], df["spine_2_y"].iloc[i], df["spine_2_z"].iloc[i]]
         )
         l_wrist = np.array(
-            [df["l_wrist_x"].iloc[i], df["l_wrist_y"].iloc[i], df["l_wrist_z"].iloc[i]]
+            [
+                df["left_wrist_x"].iloc[i],
+                df["left_wrist_y"].iloc[i],
+                df["left_wrist_z"].iloc[i],
+            ]
         )
         r_wrist = np.array(
-            [df["r_wrist_x"].iloc[i], df["r_wrist_y"].iloc[i], df["r_wrist_z"].iloc[i]]
+            [
+                df["right_wrist_x"].iloc[i],
+                df["right_wrist_y"].iloc[i],
+                df["right_wrist_z"].iloc[i],
+            ]
         )
 
         dist_l = calculate_distance(spine, l_wrist)
         dist_r = calculate_distance(spine, r_wrist)
 
-        # Expansiveness defined as the maximum boundary of the kinesphere
         expansiveness_raw.append(max(dist_l, dist_r))
 
     df[filtered_col] = filtered_target_data
     df["expansiveness_raw"] = expansiveness_raw
 
     # ==========================================
-    # Plot 1: Geometric Noise Reduction
+    # Plot 1: Geometric Noise Reduction (Target)
     # ==========================================
     joint_display_name = target_joint.replace("_", " ").title()
     axis_display_name = target_axis.upper()
@@ -133,7 +181,7 @@ def main():
     plt.plot(
         timestamps,
         df[target_col],
-        label="Raw ZED SDK Output",
+        label=f"Raw Output ({axis_display_name})",
         color="red",
         alpha=0.4,
         linewidth=1,
@@ -141,12 +189,12 @@ def main():
     plt.plot(
         timestamps,
         df[filtered_col],
-        label="1 Euro Filter Output",
+        label=f"1 Euro Filtered ({axis_display_name})",
         color="blue",
         linewidth=1.5,
     )
     plt.title(
-        f"Geometric Sensor Noise Reduction ({joint_display_name} {axis_display_name}-Axis)"
+        f"Geometric Sensor Noise Reduction ({joint_display_name} | Axis: {axis_display_name})"
     )
     plt.xlabel("Time (Seconds)")
     plt.ylabel("World Coordinate (mm)")
