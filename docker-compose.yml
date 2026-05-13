@@ -33,3 +33,20 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+# Kinematic extractor and 1 Euro filtering pipeline
+  filter:
+      build: .
+      container_name: skeleton_filtering
+      command: tail -f /dev/null
+      volumes:
+        - ./data:/VP_AR_full_System_dockerized/data
+        - ./skeleton_filtering:/VP_AR_full_System_dockerized/skeleton_filtering
+        - ./run_filtering.sh:/VP_AR_full_System_dockerized/run_filtering.sh
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: all
+                capabilities: [gpu]

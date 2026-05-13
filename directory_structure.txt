@@ -67,6 +67,13 @@
 │   │                                            #   and board sizes to identify working configuration
 │   └── preprocess_zed_frames.py                 # Optional: brightens/sharpens ZED frames before
 │                                                #   calibration (gamma correction, CLAHE, sharpening)
+├── skeleton_filtering/                          # Phase 3: Kinematic extraction and filtering
+│   ├── extract_kinematics.py                    # Extracts 3D joints from SVO to CSV
+│   ├── one_euro_filter.py                       # 1 Euro Filter mathematical class
+│   └── validate_kinematics.py                   # Applies filter and generates validation plots
+│
+├── run_filtering.sh                             # One-click Phase 3 runner
+│                                                #  Usage: ./run_filtering.sh <dataset_name>
 │
 ├── run_temporal.sh                              # One-click Phase 1 runner
 │                                                #   Usage: ./run_temporal.sh <dataset_name>
