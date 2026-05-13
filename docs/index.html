@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kinematic AR — VP System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── Reset & Base ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0c0d0f;
+      --surface:  #131518;
+      --border:   #22262d;
+      --gold:     #c9a84c;
+      --gold-dim: #7a6030;
+      --text:     #d4cfc8;
+      --muted:    #6b6860;
+      --accent:   #4a7fa5;
+      --accent2:  #7a4a9a;
+      --mono:     'DM Mono', monospace;
+      --serif:    'DM Serif Display', serif;
+      --sans:     'DM Sans', sans-serif;
+      --radius:   4px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 15px;
+      font-weight: 300;
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    /* ─── Noise overlay ─────────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+
+    /* ─── Layout ────────────────────────────────────────────────────── */
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 32px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ─── Navigation ────────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid var(--border);
+      background: rgba(12, 13, 15, 0.92);
+      backdrop-filter: blur(12px);
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 14px;
+      padding-bottom: 14px;
+    }
+
+    .nav-brand {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--gold);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      text-decoration: none;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    /* ─── Hero ──────────────────────────────────────────────────────── */
+    .hero {
+      padding: 100px 0 80px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hero-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--gold);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .hero-label::before {
+      content: '';
+      display: block;
+      width: 32px;
+      height: 1px;
+      background: var(--gold);
+    }
+
+    h1 {
+      font-family: var(--serif);
+      font-size: clamp(36px, 6vw, 58px);
+      font-weight: 400;
+      line-height: 1.1;
+      color: #f0ebe2;
+      margin-bottom: 12px;
+    }
+
+    h1 em {
+      font-style: italic;
+      color: var(--gold);
+    }
+
+    .hero-sub {
+      font-family: var(--sans);
+      font-size: 17px;
+      font-weight: 300;
+      color: var(--muted);
+      margin-bottom: 40px;
+      max-width: 560px;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tag {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    .tag.gold { border-color: var(--gold-dim); color: var(--gold); }
+
+    /* ─── Section structure ─────────────────────────────────────────── */
+    section {
+      padding: 80px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    h2 {
+      font-family: var(--serif);
+      font-size: 32px;
+      font-weight: 400;
+      color: #f0ebe2;
+      margin-bottom: 20px;
+      line-height: 1.2;
+    }
+
+    h3 {
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text);
+      margin-bottom: 12px;
+      margin-top: 36px;
+    }
+
+    p {
+      color: var(--text);
+      margin-bottom: 16px;
+      max-width: 680px;
+    }
+
+    /* ─── Pillars grid ──────────────────────────────────────────────── */
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-top: 40px;
+    }
+
+    .pillar {
+      background: var(--surface);
+      padding: 28px 24px;
+    }
+
+    .pillar-number {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--gold);
+      letter-spacing: 0.12em;
+      margin-bottom: 14px;
+    }
+
+    .pillar h4 {
+      font-family: var(--serif);
+      font-size: 18px;
+      font-weight: 400;
+      color: #f0ebe2;
+      margin-bottom: 10px;
+    }
+
+    .pillar p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: none;
+      margin: 0;
+    }
+
+    /* ─── Descriptor cards ──────────────────────────────────────────── */
+    .descriptors {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-top: 40px;
+    }
+
+    .desc-card {
+      background: var(--surface);
+      padding: 28px 26px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .desc-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 3px;
+      height: 100%;
+    }
+
+    .desc-card.effort::before    { background: #c9a84c; }
+    .desc-card.expand::before    { background: #4a7fa5; }
+    .desc-card.weight::before    { background: #7a4a9a; }
+    .desc-card.flow::before      { background: #4a8a5a; }
+
+    .desc-lma {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .desc-card h4 {
+      font-family: var(--serif);
+      font-size: 22px;
+      font-weight: 400;
+      color: #f0ebe2;
+      margin-bottom: 10px;
+    }
+
+    .desc-card p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: none;
+      margin-bottom: 14px;
+    }
+
+    .desc-output {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+    }
+
+    .desc-output span {
+      color: var(--gold);
+    }
+
+    /* ─── Action drives table ───────────────────────────────────────── */
+    .drives-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-top: 40px;
+    }
+
+    .drive-header {
+      background: #0f1114;
+      padding: 12px 14px;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+
+    .drive-cell {
+      background: var(--surface);
+      padding: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .drive-cell strong {
+      display: block;
+      font-family: var(--serif);
+      font-size: 15px;
+      font-weight: 400;
+      color: #f0ebe2;
+      margin-bottom: 4px;
+    }
+
+    .drive-cell .qualities {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--gold-dim);
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+
+    /* ─── Demo section ──────────────────────────────────────────────── */
+    .demo-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      margin-top: 40px;
+      align-items: start;
+    }
+
+    .demo-visual {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      aspect-ratio: 4/3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Animated cube grid illustration */
+    .cube-grid {
+      position: relative;
+      width: 200px;
+      height: 200px;
+    }
+
+    .cube-dot {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: var(--gold);
+      opacity: 0.6;
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    .cube-dot:nth-child(odd)  { animation-delay: calc(var(--i) * 0.15s); opacity: 0.3; background: var(--accent); }
+    .cube-dot:nth-child(even) { animation-delay: calc(var(--i) * 0.2s);  opacity: 0.5; }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1);   opacity: 0.4; }
+      50%       { transform: scale(1.6); opacity: 0.9; }
+    }
+
+    .performer-dot {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 16px; height: 16px;
+      background: #f0ebe2;
+      border-radius: 50%;
+      z-index: 2;
+      box-shadow: 0 0 24px rgba(201, 168, 76, 0.6);
+    }
+
+    .demo-description p {
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 14px;
+      max-width: none;
+    }
+
+    .demo-note {
+      border-left: 2px solid var(--gold);
+      padding: 12px 16px;
+      background: rgba(201, 168, 76, 0.04);
+      font-size: 13px;
+      color: var(--muted);
+      font-style: italic;
+      margin-top: 20px;
+    }
+
+    /* ─── Smoothing models ──────────────────────────────────────────── */
+    .models-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-top: 40px;
+    }
+
+    .model-card {
+      background: var(--surface);
+      padding: 28px 24px;
+    }
+
+    .model-tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .model-card h4 {
+      font-family: var(--serif);
+      font-size: 20px;
+      font-weight: 400;
+      color: #f0ebe2;
+      margin-bottom: 10px;
+    }
+
+    .model-card p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: none;
+      margin-bottom: 14px;
+    }
+
+    .model-lma {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 6px 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      color: var(--gold);
+      margin-bottom: 10px;
+      display: block;
+    }
+
+    .model-dance {
+      font-size: 12px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ─── Repos section ─────────────────────────────────────────────── */
+    .repos {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-top: 40px;
+    }
+
+    .repo-row {
+      display: grid;
+      grid-template-columns: 200px 1fr auto;
+      align-items: center;
+      background: var(--surface);
+      padding: 18px 22px;
+      gap: 20px;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+
+    .repo-row:hover { background: #181c20; }
+
+    .repo-name {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--gold);
+      letter-spacing: 0.06em;
+    }
+
+    .repo-desc {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .repo-arrow {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--border);
+      transition: color 0.15s;
+    }
+
+    .repo-row:hover .repo-arrow { color: var(--gold); }
+
+    /* ─── References ────────────────────────────────────────────────── */
+    .refs {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 32px;
+    }
+
+    .ref {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .ref-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--gold);
+      padding-top: 2px;
+    }
+
+    .ref-text {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .ref-text a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .ref-text a:hover { text-decoration: underline; }
+
+    /* ─── Footer ────────────────────────────────────────────────────── */
+    footer {
+      padding: 48px 0;
+    }
+
+    footer .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-left {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .footer-right {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--border);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* ─── Utilities ─────────────────────────────────────────────────── */
+    .spacer { height: 24px; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 2px 7px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--gold);
+      border-radius: var(--radius);
+    }
+
+    /* ─── Fade-in on scroll ─────────────────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ─── Responsive ────────────────────────────────────────────────── */
+    @media (max-width: 700px) {
+      .pillars,
+      .descriptors,
+      .drives-grid,
+      .models-grid { grid-template-columns: 1fr; }
+      .demo-layout { grid-template-columns: 1fr; }
+      .repo-row    { grid-template-columns: 1fr; }
+      .repo-arrow  { display: none; }
+      .nav-links   { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Navigation ───────────────────────────────────────────────── -->
+  <nav>
+    <div class="container">
+      <a class="nav-brand" href="#">VP / AR / EI System</a>
+      <ul class="nav-links">
+        <li><a href="#system">System</a></li>
+        <li><a href="#descriptors">Descriptors</a></li>
+        <li><a href="#demo">Demo</a></li>
+        <li><a href="#smoothing">Smoothing</a></li>
+        <li><a href="#repos">Repos</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ── Hero ─────────────────────────────────────────────────────── -->
+  <div class="hero">
+    <div class="container">
+      <div class="hero-label">Medialogy MSc — Aalborg University Copenhagen</div>
+      <h1>Kinematic <em>AR</em><br>for Virtual Production</h1>
+      <p class="hero-sub">
+        Modulating CG elements in a live LED volume through the expressive
+        quality of human movement — grounded in Laban Movement Analysis.
+      </p>
+      <div class="hero-meta">
+        <span class="tag gold">Embodied Interaction</span>
+        <span class="tag">Virtual Production</span>
+        <span class="tag">ZED 2i · Body_38</span>
+        <span class="tag">Unreal Engine 5</span>
+        <span class="tag">LMA · Effort Theory</span>
+        <span class="tag">Muhannad Al Ulaby · 2026</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── System Overview ──────────────────────────────────────────── -->
+  <section id="system">
+    <div class="container">
+      <div class="section-label">01 — Overview</div>
+      <h2>Three Systems,<br>One Composited Frame</h2>
+      <p>
+        The project establishes a real-time Virtual Production pipeline in which
+        three independent technical layers operate simultaneously and are visible
+        in a single composited output frame. Each layer builds on the previous:
+        depth-correct occlusion requires camera tracking; embodied interaction
+        requires the calibrated skeletal stream that occlusion depends on.
+      </p>
+      <div class="pillars reveal">
+        <div class="pillar">
+          <div class="pillar-number">01 / SIGNAL PROCESSING</div>
+          <h4>Camera Tracking &amp; Occlusion</h4>
+          <p>Base-free 6-DoF camera tracking via ZED SLAM. Per-pixel depth-correct
+             AR occlusion through a Spout-streamed depth map reprojected into
+             UE5 Composure. Stencil-based edge softness per AR object.</p>
+        </div>
+        <div class="pillar">
+          <div class="pillar-number">02 / KINEMATIC EXTRACTION</div>
+          <h4>Skeletal Denoising</h4>
+          <p>ZED BODY_38 38-joint tracking at 30 Hz. 1 Euro Filter applied
+             per-joint to suppress geometric sensor noise while preserving
+             transient dynamics. LMA Expansiveness metric computed offline
+             as analytical validation.</p>
+        </div>
+        <div class="pillar">
+          <div class="pillar-number">03 / EMBODIED INTERACTION</div>
+          <h4>Kinematic AR</h4>
+          <p>Four LMA Effort descriptors computed from the live skeletal stream
+             drive CG element behaviour. Movement quality — not position —
+             modulates the virtual environment. Two switchable operating modes
+             with no level reload.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Descriptors ──────────────────────────────────────────────── -->
+  <section id="descriptors">
+    <div class="container">
+      <div class="section-label">02 — LMA Descriptors</div>
+      <h2>Four Qualities.<br>Continuous. Real-Time.</h2>
+      <p>
+        The system does not classify gesture types or respond to body position.
+        It computes four continuous scalar descriptors from the live ZED skeletal
+        stream each tick, each corresponding to one of Laban's four Effort factors.
+        The eight canonical LMA Action Drives emerge as regions in the resulting
+        four-dimensional quality space rather than being explicitly detected.
+      </p>
+
+      <div class="descriptors reveal">
+        <div class="desc-card effort">
+          <div class="desc-lma">LMA Time — Sudden ↔ Sustained</div>
+          <h4>Effort</h4>
+          <p>Weighted RMS velocity of key limb joints — wrists, elbows, shoulders,
+             spine, head. Measures the energetic urgency of movement. The same
+             physical position produces any Effort value depending on how the
+             body arrived there.</p>
+          <div class="desc-output">→ <span>Niagara</span> · particle emission rate &amp; velocity</div>
+        </div>
+        <div class="desc-card expand">
+          <div class="desc-lma">LMA Space — Expanded ↔ Contracted</div>
+          <h4>Expansiveness</h4>
+          <p>Maximum distance from either wrist to <code>spine_2</code>. The
+             maximum of two wrists captures kinesphere reach correctly — the
+             largest spatial gesture defines the body's spatial attitude.
+             Force direction follows the wrist-to-spine vector, not omnidirectionally.</p>
+          <div class="desc-output">→ <span>MPC</span> · WPO deformation frequency · RadialForce radius</div>
+        </div>
+        <div class="desc-card weight">
+          <div class="desc-lma">LMA Weight — Strong ↔ Light</div>
+          <h4>Weight</h4>
+          <p>Acceleration magnitude across key joints — rate of velocity change.
+             Independent of Effort: a body can move fast with low acceleration
+             (quick drift) or fast with high acceleration (punch). High Weight
+             means force is being exerted or absorbed.</p>
+          <div class="desc-output">→ <span>MPC</span> · WPO surface bend amplitude</div>
+        </div>
+        <div class="desc-card flow">
+          <div class="desc-lma">LMA Flow — Free ↔ Bound</div>
+          <h4>Flow</h4>
+          <p>Rolling standard deviation of velocity delta over a 30-frame window.
+             High sigma — velocity is erratic, unpredictable — reads as Free.
+             Low sigma — velocity changes predictably — reads as Bound. Serves
+             simultaneously as the internal smoothing control variable.</p>
+          <div class="desc-output">→ <span>Niagara</span> · attractor strength &nbsp;·&nbsp; <span>MPC</span> · surface noise scale</div>
+        </div>
+      </div>
+
+      <h3>The Eight Action Drives</h3>
+      <p>
+        Combinations of Effort, Expansiveness, and Weight produce the eight LMA
+        Action Drives as emergent output regions. The system positions movement
+        continuously within this space — the most expressive work happens in
+        transitions between archetypes, not inside any single one.
+      </p>
+      <div class="drives-grid reveal">
+        <div class="drive-header">Drive</div>
+        <div class="drive-header">Quality</div>
+        <div class="drive-header">Descriptor Profile</div>
+        <div class="drive-header">CG Grid Response</div>
+
+        <div class="drive-cell"><strong>Slash</strong></div>
+        <div class="drive-cell"><span class="qualities">Violent · Chaotic</span></div>
+        <div class="drive-cell">High Effort · High Weight · Expanded · Free</div>
+        <div class="drive-cell">Max scatter, turbulent surfaces, dense fast particles</div>
+
+        <div class="drive-cell"><strong>Punch / Thrust</strong></div>
+        <div class="drive-cell"><span class="qualities">Aggressive · Focused</span></div>
+        <div class="drive-cell">High Effort · High Weight · Contracted · Bound</div>
+        <div class="drive-cell">Forceful implosion, spike rebound, dense inward burst</div>
+
+        <div class="drive-cell"><strong>Wring</strong></div>
+        <div class="drive-cell"><span class="qualities">Tortured · Tense</span></div>
+        <div class="drive-cell">Low Effort · High Weight · Expanded · Bound</div>
+        <div class="drive-cell">Slow wide stretch with weight, deep arc surface bends</div>
+
+        <div class="drive-cell"><strong>Press</strong></div>
+        <div class="drive-cell"><span class="qualities">Determined · Heavy</span></div>
+        <div class="drive-cell">Low Effort · High Weight · Contracted · Bound</div>
+        <div class="drive-cell">Deliberate inward compression, smooth deep bends</div>
+
+        <div class="drive-cell"><strong>Flick</strong></div>
+        <div class="drive-cell"><span class="qualities">Playful · Erratic</span></div>
+        <div class="drive-cell">High Effort · Low Weight · Expanded · Free</div>
+        <div class="drive-cell">Light scatter, brief surface flutter, fast sparse particles</div>
+
+        <div class="drive-cell"><strong>Dab</strong></div>
+        <div class="drive-cell"><span class="qualities">Precise · Delicate</span></div>
+        <div class="drive-cell">High Effort · Low Weight · Contracted · Bound</div>
+        <div class="drive-cell">Small precise burst, minimal deformation, sharp pulse</div>
+
+        <div class="drive-cell"><strong>Float</strong></div>
+        <div class="drive-cell"><span class="qualities">Dreamy · Meandering</span></div>
+        <div class="drive-cell">Low Effort · Low Weight · Expanded · Free</div>
+        <div class="drive-cell">Slow outward drift, gentle undulation, sparse particles</div>
+
+        <div class="drive-cell"><strong>Glide</strong></div>
+        <div class="drive-cell"><span class="qualities">Smooth · Controlled</span></div>
+        <div class="drive-cell">Low Effort · Low Weight · Contracted · Bound</div>
+        <div class="drive-cell">Tight stable formation, smooth surfaces, calm field</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Demo ─────────────────────────────────────────────────────── -->
+  <section id="demo">
+    <div class="container">
+      <div class="section-label">03 — Demonstration</div>
+      <h2>A Grid That Listens<br>to How You Move</h2>
+      <div class="demo-layout">
+        <div class="demo-visual">
+          <div class="cube-grid" id="cubeGrid"></div>
+          <div class="performer-dot"></div>
+        </div>
+        <div class="demo-description reveal">
+          <p>
+            The demonstration places the performer at the centre of a
+            three-dimensional grid of physics-simulated cubic objects in an LED
+            volume. The grid is permanently anchored to the performer's pelvis
+            joint, keeping the body at the centre of the formation regardless
+            of movement through the stage.
+          </p>
+          <p>
+            Cubes in front of the performer are occluded by the depth comparison
+            pipeline — the body correctly appears in front of them. Cubes behind
+            are hidden behind the body. A camera rotating around the performer
+            continuously renegotiates these depth relationships, demonstrating
+            that occlusion is genuinely three-dimensional.
+          </p>
+          <p>
+            The grid responds to movement quality, not position. An arm thrust
+            forward with high force pushes the grid forward along the arm's
+            direction vector. A slow expansion opens the grid outward over a
+            wide radius. A sudden explosive movement scatters the cubes and
+            floods the space with particles.
+          </p>
+          <div class="demo-note">
+            The system reads the body's expressive state, not its location.
+            A stationary performer exerting high muscular tension produces a
+            different grid response than the same position held with no tension.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Smoothing ─────────────────────────────────────────────────── -->
+  <section id="smoothing">
+    <div class="container">
+      <div class="section-label">04 — Smoothing Models</div>
+      <h2>Three Philosophies<br>of Response</h2>
+      <p>
+        Geometric sensor noise from ZED BODY_38 joint position estimation is
+        suppressed using the 1 Euro Filter per joint before descriptor computation.
+        On top of this, the computed descriptor scalars pass through a calibrated
+        adaptive interpolation stage. Three mapping models are available,
+        selectable at runtime — each corresponding to a distinct movement
+        tradition and LMA quality.
+      </p>
+      <div class="models-grid reveal">
+        <div class="model-card">
+          <div class="model-tag">Model 01</div>
+          <h4>Linear</h4>
+          <p>Conservative proportional response. Tracks the descriptor signal
+             faithfully. Never overreacts. Every movement registers with
+             appropriate weight.</p>
+          <span class="model-lma">LMA: Sustained + Bound</span>
+          <div class="model-dance">
+            Classical Ballet · Cecchetti · RAD · Vaganova ·
+            Neoclassical (Balanchine, Forsythe)
+          </div>
+        </div>
+        <div class="model-card">
+          <div class="model-tag">Model 02</div>
+          <h4>Sigmoid</h4>
+          <p>Non-linear self-regulating response. Most sensitive at the transition
+             zone between stability and instability — where movement quality is
+             most expressively complex.</p>
+          <span class="model-lma">LMA: Transitional + Free</span>
+          <div class="model-dance">
+            Contemporary · Limón · Release Technique ·
+            Contact Improvisation · Cunningham
+          </div>
+        </div>
+        <div class="model-card">
+          <div class="model-tag">Model 03</div>
+          <h4>Piecewise</h4>
+          <p>Explicit sigma breakpoints corresponding to five LMA velocity tiers.
+             Distinct behavioural states with calibrated threshold transitions.
+             Recognises when a qualitative tier has been crossed.</p>
+          <span class="model-lma">LMA: Sudden + Strong · Bound between states</span>
+          <div class="model-dance">
+            Hip-Hop · Popping · Locking · Flamenco ·
+            Butoh · Breaking
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Repos ─────────────────────────────────────────────────────── -->
+  <section id="repos">
+    <div class="container">
+      <div class="section-label">05 — Repositories</div>
+      <h2>System Architecture<br>Across Four Repos</h2>
+      <p>
+        The project is structured as four independent repositories, each with a
+        clearly scoped responsibility. The offline analysis and calibration repos
+        feed configuration outputs that the runtime repo consumes at startup.
+      </p>
+      <div class="repos reveal">
+        <a class="repo-row" href="https://github.com/Muhannad7794/VP_AR_full_System" target="_blank">
+          <div class="repo-name">VP_AR_full_System</div>
+          <div class="repo-desc">Offline pipeline: temporal alignment, spatial calibration, kinematic extraction and 1 Euro filtering. This page.</div>
+          <div class="repo-arrow">→</div>
+        </a>
+        <a class="repo-row" href="https://github.com/Muhannad7794/VP_AR_full_System_runtime" target="_blank">
+          <div class="repo-name">_runtime</div>
+          <div class="repo-desc">UE5 C++ runtime: camera tracking, compositing, occlusion, EI descriptor components, Niagara, mode switching.</div>
+          <div class="repo-arrow">→</div>
+        </a>
+        <a class="repo-row" href="https://github.com/Muhannad7794/vp_baseFree_tracking" target="_blank">
+          <div class="repo-name">vp_baseFree_tracking</div>
+          <div class="repo-desc">Adaptive smoothing analysis pipeline for camera tracking. Sigma-based interpolation models: linear, sigmoid, piecewise.</div>
+          <div class="repo-arrow">→</div>
+        </a>
+        <a class="repo-row" href="#" target="_blank">
+          <div class="repo-name">MoCap_VP_System</div>
+          <div class="repo-desc">MoCap descriptor smoothing system. LMA category-based calibration. Denoise pipeline for body tracking descriptor scalars.</div>
+          <div class="repo-arrow">→</div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── References ────────────────────────────────────────────────── -->
+  <section id="references">
+    <div class="container">
+      <div class="section-label">06 — References</div>
+      <h2>Theoretical Grounding</h2>
+      <div class="refs">
+        <div class="ref">
+          <div class="ref-num">[1]</div>
+          <div class="ref-text">
+            Caramiaux, B., Bevilacqua, F., &amp; Schiphorst, T. (2015).
+            Towards a Movement Quality Framework for Interactive Systems.
+            <em>MOCO '15</em>. ACM.
+            <a href="https://doi.org/10.1145/2790994.2791001" target="_blank">doi:10.1145/2790994.2791001</a>
+          </div>
+        </div>
+        <div class="ref">
+          <div class="ref-num">[2]</div>
+          <div class="ref-text">
+            Laban, R., &amp; Lawrence, F. C. (1974).
+            <em>Effort: Economy in Body Movement.</em> Plays, Inc.
+          </div>
+        </div>
+        <div class="ref">
+          <div class="ref-num">[3]</div>
+          <div class="ref-text">
+            Loke, L., &amp; Robertson, T. (2013). Moving and making strange.
+            <em>ACM TOCHI, 20</em>(1).
+            <a href="https://doi.org/10.1145/2442106.2442113" target="_blank">doi:10.1145/2442106.2442113</a>
+          </div>
+        </div>
+        <div class="ref">
+          <div class="ref-num">[4]</div>
+          <div class="ref-text">
+            Newlove, J., &amp; Dalby, J. (2004).
+            <em>Laban for Actors and Dancers.</em> Nick Hern Books.
+          </div>
+        </div>
+        <div class="ref">
+          <div class="ref-num">[5]</div>
+          <div class="ref-text">
+            Al Ulaby, M. (2026). Base-Free Adaptive Camera Tracking and
+            Real-Time Depth-Occlusion for Virtual Production.
+            MED08, Medialogy MSc, Aalborg University Copenhagen.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ────────────────────────────────────────────────────── -->
+  <footer>
+    <div class="container">
+      <div class="footer-left">
+        Muhannad Al Ulaby<br>
+        Medialogy MSc · Aalborg University Copenhagen · 2026<br>
+        <a href="https://github.com/Muhannad7794" style="color:var(--gold-dim);text-decoration:none;">github.com/Muhannad7794</a>
+      </div>
+      <div class="footer-right">Kinematic AR<br>VP / AR / EI</div>
+    </div>
+  </footer>
+
+  <script>
+    // ── Scroll reveal ──────────────────────────────────────────────
+    const observer = new IntersectionObserver(
+      entries => entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('visible'); }
+      }),
+      { threshold: 0.12 }
+    );
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // ── Animated cube grid ─────────────────────────────────────────
+    const grid = document.getElementById('cubeGrid');
+    if (grid) {
+      const cols = 6, rows = 6, size = 28;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const dot = document.createElement('div');
+          dot.className = 'cube-dot';
+          dot.style.left = (c * size + 16) + 'px';
+          dot.style.top  = (r * size + 16) + 'px';
+          dot.style.setProperty('--i', String(r * cols + c));
+          dot.style.animationDelay = ((r * cols + c) * 0.08) + 's';
+          grid.appendChild(dot);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
