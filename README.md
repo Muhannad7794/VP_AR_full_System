@@ -305,13 +305,229 @@ docker compose run --rm align python3 spatial_alignment/diagnose_detection.py --
 ```
 This tests all supported ArUco dictionary variants and board size combinations and identifies the working configuration.
 
-## Phase 3: Runtime Integration in Unreal Engine 5
-- After spatial calibration is complete, the results are ready to be applied in UE5 as follows:
-- Open the spatial_calibration.json output file.
-- In the UE5 level, select the actor recieving the Live Link tracking data `BP_TrackerAnchor`.
-- In the Details panel, find Lens Offset → Location.
-- Enter the ue5_offset X, Y, Z values from the JSON (in centimetres).
-- The virtual camera will now track from the Sony optical centre rather than the ZED optical centre, eliminating the spatial offset between the skeleton holdout and the live-action performer.
+## 🦴 Phase 3: Kinematic Extraction and Filtering
+With the cameras spatially calibrated, Phase 3 extracts the performer's 3D skeletal data from the ZED SVO recording, denoises each joint trajectory using the 1 Euro Filter, and computes the LMA Expansiveness metric as a proxy for the performer's use of kinesphere space.
+
+Run the full pipeline with a single command:
+
+```
+docker compose run --rm filter ./run_filtering.sh <dataset name>
+```
+
+To target a specific joint and axis for the noise-reduction plot:
+
+```
+docker compose run --rm filter ./run_filtering.sh <dataset name> --joint <joint_name> --axis <x|y|z>
+```
+
+Default: `--joint right_wrist --axis x`. Any of the 38 BODY_38 joint names are valid (e.g., `pelvis`, `left_wrist`, `right_knee`, `spine_2`).
+
+**What This Does:**
+
+---
+
+**[1/2] `extract_kinematics.py`** — Opens the raw `.svo` file from `data/raw/<dataset>/` using the ZED SDK and runs the `HUMAN_BODY_ACCURATE` body tracking model in `BODY_38` format. For every frame where the pelvis root joint is confidently tracked, it writes one row of 3D world-space coordinates for all 38 joints to a CSV file.
+
+The 38 joints extracted (BODY_38 format):
+
+> `pelvis` · `spine_1` · `spine_2` · `spine_3` · `neck` · `nose` · `left_eye` · `right_eye` · `left_ear` · `right_ear` · `left_clavicle` · `right_clavicle` · `left_shoulder` · `right_shoulder` · `left_elbow` · `right_elbow` · `left_wrist` · `right_wrist` · `left_hip` · `right_hip` · `left_knee` · `right_knee` · `left_ankle` · `right_ankle` · `left_big_toe` · `right_big_toe` · `left_small_toe` · `right_small_toe` · `left_heel` · `right_heel` · `left_hand_thumb_4` · `right_hand_thumb_4` · `left_hand_index_1` · `right_hand_index_1` · `left_hand_middle_4` · `right_hand_middle_4` · `left_hand_pinky_1` · `right_hand_pinky_1`
+
+**Output: `raw_skeleton_data.csv`** — 115-column flat table (1 frame index + 38 joints × 3 axes). All coordinates are in **millimetres** in ZED world space:
+
+```
+frame_idx, pelvis_x, pelvis_y, pelvis_z, spine_1_x, spine_1_y, spine_1_z, ..., right_hand_pinky_1_x, right_hand_pinky_1_y, right_hand_pinky_1_z
+0,  -486.42,  375.43, 1715.04,  -569.30,  329.02, 1699.13, ...,  312.45, -88.12, 2198.30
+1,  -491.15,  379.24, 1714.81,  -601.54,  348.78, 1781.67, ...,  314.10, -87.55, 2201.77
+2,  -493.80,  381.10, 1715.22,  -605.21,  351.33, 1784.02, ...,  315.02, -86.91, 2203.44
+```
+
+> Rows are only written for frames where the pelvis joint is not `NaN` — frames where the performer is fully out of frame are silently skipped. The `frame_idx` column matches the original ZED SVO frame number, not a sequential row counter.
+
+---
+
+**[2/2] `validate_kinematics.py`** — Reads the raw CSV, applies the **1 Euro Filter** to denoise the target joint, computes the **LMA Kinesphere Expansiveness** metric frame-by-frame, and saves two diagnostic plots.
+
+**1 Euro Filter parameters (hardcoded):**
+
+```json
+{
+  "fps": 30,
+  "min_cutoff": 1.0,
+  "beta": 0.05,
+  "d_cutoff": 1.0
+}
+```
+
+> `min_cutoff` (Hz) controls jitter suppression at rest — lower values smooth more aggressively. `beta` controls lag reduction during fast movement — higher values reduce lag at the cost of some noise passthrough. The current values (`min_cutoff=1.0`, `beta=0.05`) are tuned for ZED 2i body tracking at 30 fps.
+
+**Plot 1 — 1 Euro Noise Reduction (`1Euro_noise_reduction_{joint}_{axis}.png`):**
+
+Overlays the raw (red) and filtered (blue) coordinate signal for the selected joint and axis over time.
+
+![1 Euro Noise Reduction — right_wrist X](data/plots/dataset_01/kinematics/1Euro_noise_reduction_right_wrist_x.png)
+
+> The red signal is the raw ZED SDK output; the blue signal is the 1 Euro filtered output. The filter attenuates high-frequency jitter at rest while preserving sharp transients during ballistic limb movements. This comparison is the primary diagnostic for tuning `min_cutoff` and `beta`.
+
+**Plot 2 — LMA Expansiveness (`lma_expansiveness.png`):**
+
+Plots the maximum reach distance from `spine_2` to either wrist over time — a proxy for the performer's use of kinesphere space (Laban Movement Analysis).
+
+![LMA Expansiveness](data/plots/dataset_01/kinematics/lma_expansiveness.png)
+
+> The y-axis is the Euclidean distance in mm from `spine_2` to the furthest wrist. Peaks correspond to large gestural reaches; valleys indicate arms held close to the body. This metric is computed from raw (unfiltered) wrist positions to preserve the full dynamic range of the gesture signal.
+The LMA Expansiveness metric and the filtered joint trajectories produced in Phase 3 serve as the analytical foundation for the Embodied Interaction layer described in Phase 4. 
+The 1 Euro Filter parameters validated here (`min_cutoff=1.0`, `beta=0.05`) are the same parameters applied at runtime inside the UE5 C++ component to denoise the live ZED skeletal stream before descriptor computation.
+
+---
+
+## 🕺 Phase 4: Embodied Interaction — Kinematic AR
+
+Phase 4 extends the compositing pipeline into a live action-perception 
+coupling system. The performer's movement qualities — derived from the 
+filtered 38-joint skeletal stream — drive the behaviour of foreground CG 
+elements rendered in Unreal Engine 5. The system is grounded in Laban 
+Movement Analysis (LMA) and computes four continuous descriptors from the 
+live ZED body tracking data at 30 Hz.
+
+The Embodied Interaction layer operates in two switchable modes with no 
+level reload required:
+
+- **Compositing Mode** — CG elements behave as depth-occluded compositing 
+  objects only. The stencil-based occlusion pipeline runs as normal. 
+  No interaction logic is active.
+- **Interactive Mode** — The full EI layer activates. CG elements respond 
+  to the qualitative character of the performer's movement in real time.
+
+---
+
+### 4.1 The Four LMA Descriptors
+
+The system computes four scalar values from the live ZED BODY_38 skeletal 
+stream each tick. Each corresponds to one of Laban's four Effort factors.
+
+| Descriptor | LMA Factor | Computation | Output Target |
+|---|---|---|---|
+| **Effort** | Time: Sudden ↔ Sustained | Weighted RMS velocity of key limb joints | Niagara: particle emission rate and velocity |
+| **Expansiveness** | Space: Expanded ↔ Contracted | Maximum wrist-to-spine_2 distance | MPC: WPO surface deformation frequency + RadialForce radius |
+| **Weight** | Weight: Strong ↔ Light | Acceleration magnitude across key joints | MPC: WPO surface bend amplitude |
+| **Flow** | Flow: Free ↔ Bound | Rolling standard deviation of velocity delta | Niagara: attractor strength + MPC: surface noise scale |
+
+The force field distributes along the direction vector from `spine_2` to the 
+furthest wrist, not omnidirectionally. This means a forward arm thrust pushes 
+the CG grid forward; a lateral sweep pushes it laterally. The magnitude is 
+governed by the quality descriptors. The direction is read from body 
+orientation because, in LMA terms, directional intent is itself a spatial 
+quality — not a positional fact separate from it.
+
+---
+
+### 4.2 The Eight LMA Action Drives
+
+The four descriptors combine to produce the eight canonical LMA Action Drives 
+as continuous emergent regions rather than discrete classifications. The system 
+does not classify which drive is occurring; it positions the movement 
+continuously within the four-dimensional Effort space.
+
+| Action Drive | Time | Weight | Space | Flow | CG Grid Response |
+|---|---|---|---|---|---|
+| **Punch / Thrust** | Sudden | Strong | Contracted | Bound | Forceful tight implosion, spike rebound |
+| **Slash** | Sudden | Strong | Expanded | Free | Maximum scatter, turbulent surface, dense particles |
+| **Wring** | Sustained | Strong | Expanded | Bound | Slow outward stretch with weight, wide arc bends |
+| **Press** | Sustained | Strong | Contracted | Bound | Deliberate inward compression, deep smooth bends |
+| **Flick** | Sudden | Light | Expanded | Free | Light scatter, brief surface flutter, fast sparse particles |
+| **Dab** | Sudden | Light | Contracted | Bound | Small precise burst, minimal deformation |
+| **Float** | Sustained | Light | Expanded | Free | Slow outward drift, gentle undulation, sparse particles |
+| **Glide** | Sustained | Light | Contracted | Bound | Tight stable formation, smooth surfaces, calm field |
+
+---
+
+### 4.3 CG Element Design — Particle Grid
+
+The demonstration scenario places the performer at the centre of a 
+three-dimensional grid of physics-simulated cubic objects in the LED volume. 
+The grid is permanently anchored to the performer's pelvis joint position 
+in world space, keeping the body at the centre of the formation regardless 
+of movement through the stage.
+
+The grid simultaneously demonstrates all three technical pillars of the system:
+
+- **Compositing and occlusion**: cubes in front of the performer are correctly 
+  occluded by the depth comparison pipeline. Cubes behind the performer are 
+  hidden behind the body. A rotating camera continuously renegotiates these 
+  depth relationships in three dimensions.
+- **Embodied interaction**: cube surfaces deform and scatter in response to 
+  movement quality. The performer's expressive choices visibly transform the 
+  virtual environment around them.
+- **Perceptual legibility**: gaps between cubes keep the performer visible 
+  through the grid at all times, making both the compositing and the 
+  interaction readable in a single frame.
+
+---
+
+### 4.4 Runtime Architecture
+
+The EI runtime is implemented in the `VP_AR_full_System_runtime` repository 
+as two UE5 C++ Actor Components:
+
+**`UKinematicDescriptorComponent`** — reads the live ZED LiveLink BODY_38 
+subject every tick, applies the 1 Euro Filter to suppress geometric sensor 
+noise, computes the four LMA descriptors, runs the adaptive output curve 
+(dead zone + saturation sigmoid), and writes the results to 
+`MPC_KinematicAR` and the Niagara component.
+
+**`UProximityDispatchComponent`** — reads the pelvis joint position every 
+tick and writes a normalised `PerformerProximity` value to the Dynamic 
+Material Instance of each registered AR mesh actor. This drives a contact 
+deformation WPO effect that is active in both operating modes, ensuring 
+clean physical boundary behaviour at depth transitions even when the EI 
+layer is off.
+
+The Material Parameter Collection `MPC_KinematicAR` holds four scalar 
+parameters written at runtime:
+
+| Parameter | Written by | Controls |
+|---|---|---|
+| `ExpansivenessLevel` | `UKinematicDescriptorComponent` | WPO deformation frequency, RadialForce radius |
+| `WeightLevel` | `UKinematicDescriptorComponent` | WPO surface bend amplitude |
+| `FlowLevel` | `UKinematicDescriptorComponent` | WPO surface noise scale |
+| `SystemMode` | `UProximityDispatchComponent::SetSystemMode()` | Gates WPO channels 2 and 3 in all AR materials |
+
+The Niagara system `NS_KinematicAR` exposes two User Parameters:
+
+| Parameter | Controls |
+|---|---|
+| `User.EffortLevel` | Particle emission rate and initial velocity |
+| `User.FlowLevel` | Mutual attractor strength between grid cubes |
+
+---
+
+### 4.5 Smoothing Models as Artistic Parameters
+
+The adaptive smoothing system from Phase 3 (1 Euro Filter) handles geometric 
+sensor noise suppression on the raw joint stream. On top of this, the output 
+descriptors pass through a calibrated adaptive interpolation stage before 
+reaching the visual outputs. Three mapping models are available, selectable 
+at runtime via the `EAdaptiveModel` enum on the component.
+
+The choice of model is not purely technical — it defines the expressive 
+relationship between the performer and the AR environment, and corresponds 
+to distinct movement traditions:
+
+| Model | LMA Quality | Dance Tradition |
+|---|---|---|
+| **Linear** | Sustained + Bound | Classical Ballet, Cecchetti, RAD, Neoclassical |
+| **Sigmoid** | Transitional + Free | Contemporary, Limón, Contact Improvisation, Cunningham |
+| **Piecewise** | Sudden + Strong, Bound between states | Hip-Hop, Flamenco, Butoh, Breaking |
+
+---
+
+## 🔗 Related Repositories
+
+| Repository | Role |
+|---|---|
+| [`VP_AR_full_System`](https://github.com/Muhannad7794/VP_AR_full_System) | This repository. Offline pipeline: temporal alignment, spatial calibration, kinematic extraction and filtering. |
+| [`VP_AR_full_System_runtime`](https://github.com/Muhannad7794/VP_AR_full_System_runtime) | UE5 C++ runtime: camera tracking, compositing, occlusion, EI descriptor components, Niagara, mode switching. |
+| [`vp_baseFree_tracking`](https://github.com/Muhannad7794/vp_baseFree_tracking) | Adaptive smoothing analysis pipeline for camera tracking. Analysis and modelling of sigma-based interpolation models. |
 
 ## Output Reference
 
@@ -340,3 +556,6 @@ This tests all supported ArUco dictionary variants and board size combinations a
 | `data/plots/<dataset>/spatial/corner_coverage_zed_rgb.png` | ZED corner detection density map |
 | `data/plots/<dataset>/spatial/detection_check/` | Annotated frames from inspect_detections.py |
 | `data/plots/<dataset>/spatial/diagnosis/` | Diagnostic output from diagnose_detection.py |
+| `data/extracted/<dataset>/kinematics/raw_skeleton_data.csv` | Raw 38-joint 3D coordinates (mm) per tracked frame |
+| `data/plots/<dataset>/kinematics/1Euro_noise_reduction_{joint}_{axis}.png` | Raw vs. 1 Euro filtered coordinate signal for target joint |
+| `data/plots/<dataset>/kinematics/lma_expansiveness.png` | LMA Kinesphere Expansiveness metric over time |
