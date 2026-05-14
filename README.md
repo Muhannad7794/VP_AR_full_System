@@ -364,7 +364,7 @@ frame_idx, pelvis_x, pelvis_y, pelvis_z, spine_1_x, spine_1_y, spine_1_z, ..., r
 
 Overlays the raw (red) and filtered (blue) coordinate signal for the selected joint and axis over time.
 
-![1 Euro Noise Reduction — spine Y](data/plots/dataset_01/kinematics/1Euro_noise_reduction_spine_y.png)
+![1 Euro Noise Reduction — spine Y](data/plots/dataset_01/kinematics/1Euro_noise_reduction_spine_2_y.png)
 
 > The red signal is the raw ZED SDK output; the blue signal is the 1 Euro filtered output. The filter attenuates high-frequency jitter at rest while preserving sharp transients during ballistic limb movements. This comparison is the primary diagnostic for tuning `min_cutoff` and `beta`.
 
