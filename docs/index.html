@@ -13,7 +13,7 @@
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg:       #0c0d0f;
+            --bg:       #111419;
             --surface:  #131518;
             --surface2: #181b1f;
             --border:   #22262d;
@@ -888,9 +888,8 @@
         .cube-dot {
             position: absolute;
             border-radius: 1px;
-            transition: transform 0.8s cubic-bezier(0.34,1.56,0.64,1),
-                        opacity 0.4s ease,
-                        background 0.6s ease;
+            will-change: transform, background, width, height;
+            /* motion handled by requestAnimationFrame — no CSS transition */
         }
 
         .performer-dot {
@@ -930,6 +929,7 @@
             letter-spacing: 0.12em;
             text-transform: uppercase;
             color: var(--gold);
+            transition: opacity 0.2s ease;
         }
 
         .demo-state-dots {
@@ -2020,103 +2020,134 @@
         frame();
     })();
 
-    // ── Cube grid — LMA state cycling ─────────────────────────────────
+    // ── Cube grid — continuous LMA motion ─────────────────────────────
     (function () {
-        const grid     = document.getElementById('cubeGrid');
+        const grid       = document.getElementById('cubeGrid');
         const stateLabel = document.getElementById('demoStateLabel');
         const stateDots  = document.getElementById('demoStateDots');
+        const perfDot    = document.getElementById('performerDot');
         if (!grid) return;
 
+        // Grid geometry
+        const COLS = 7, ROWS = 7, GAP = 28, PAD = 14;
+        const GW = (COLS - 1) * GAP;   // 168 — grid coordinate span
+        const GH = (ROWS - 1) * GAP;
+        const CX = GW / 2;             // 84 — grid centre
+        const CY = GH / 2;
+
+        // LMA states: colour channels, spread (how far dots scatter), turbulence
         const STATES = [
-            {
-                name: 'Float',
-                color: 'rgba(74,138,90,0.7)',
-                spread: 1.0,
-                speed: 2.8,
-                size: 7
-            },
-            {
-                name: 'Slash',
-                color: 'rgba(201,100,60,0.9)',
-                spread: 2.4,
-                speed: 0.4,
-                size: 10
-            },
-            {
-                name: 'Glide',
-                color: 'rgba(74,127,165,0.8)',
-                spread: 0.6,
-                speed: 3.5,
-                size: 8
-            },
-            {
-                name: 'Wring',
-                color: 'rgba(122,74,154,0.85)',
-                spread: 1.8,
-                speed: 1.2,
-                size: 9
-            }
+            { name: 'Float',        col: [74,  138, 90],  spread: 1.0,  turb: 0.22 },
+            { name: 'Slash',        col: [210, 95,  55],  spread: 2.4,  turb: 1.6  },
+            { name: 'Glide',        col: [74,  127, 165], spread: 0.55, turb: 0.07 },
+            { name: 'Punch/Thrust', col: [185, 72,  72],  spread: 0.38, turb: 1.1  },
+            { name: 'Wring',        col: [122, 74,  154], spread: 1.75, turb: 0.48 },
         ];
 
-        const COLS = 7, ROWS = 7, BASE_SIZE = 28;
+        // Build dots anchored at grid origin; position via CSS transform only
         const dots = [];
-
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
-                const dot = document.createElement('div');
-                dot.className = 'cube-dot';
-                const cx = c * BASE_SIZE + 14;
-                const cy = r * BASE_SIZE + 14;
-                dot.dataset.cx = cx;
-                dot.dataset.cy = cy;
-                dot.style.left  = cx + 'px';
-                dot.style.top   = cy + 'px';
-                dot.style.width = dot.style.height = '7px';
-                dot.style.background = 'rgba(201,168,76,0.5)';
-                dot.style.borderRadius = '1px';
-                grid.appendChild(dot);
-                dots.push(dot);
+                const el = document.createElement('div');
+                el.className = 'cube-dot';
+                el.style.cssText = `left:${PAD}px;top:${PAD}px;width:7px;height:7px;`;
+                grid.appendChild(el);
+                const ox = c * GAP, oy = r * GAP;
+                dots.push({ el, ox, oy, cx: ox, cy: oy });
             }
         }
 
-        // Center of grid
-        const cx = ((COLS - 1) * BASE_SIZE + 14) / 2;
-        const cy = ((ROWS - 1) * BASE_SIZE + 14) / 2;
+        // Remove CSS-controlled position from performer dot; JS drives left/top
+        perfDot.style.left = (CX + PAD) + 'px';
+        perfDot.style.top  = (CY + PAD) + 'px';
 
-        let stateIdx = 0;
+        // Smoothstep + lerp helpers
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const stp  = x => x * x * (3 - 2 * x);   // smoothstep 0→1
 
-        function applyState(state) {
-            stateLabel.textContent = state.name;
-            // Update dots
-            stateDots.querySelectorAll('.demo-state-dot').forEach((d, i) => {
-                d.classList.toggle('active', i === stateIdx % STATES.length);
-            });
+        // Lissajous 1:2 path — visits all four quadrants continuously
+        const path = t => ({
+            x: CX + Math.sin(t)           * CX * 0.64,
+            y: CY + Math.sin(2 * t + 1.1) * CY * 0.64,
+        });
+
+        let t = 0;
+        let labelIdx = -1;
+        let labelTimer = null;
+
+        function loop() {
+            t += 0.007;   // ~15 s per full Lissajous cycle at 60 fps
+
+            // ── Performer position ──────────────────────────────────────
+            const p = path(t);
+            perfDot.style.left = (p.x + PAD) + 'px';
+            perfDot.style.top  = (p.y + PAD) + 'px';
+
+            // ── Blended LMA state (5 states over one 2π cycle) ─────────
+            const cycle = ((t % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+            const raw   = (cycle / (2 * Math.PI)) * STATES.length;
+            const idxA  = Math.floor(raw) % STATES.length;
+            const idxB  = (idxA + 1)      % STATES.length;
+            const blend = stp(raw - Math.floor(raw));
+
+            const sA = STATES[idxA], sB = STATES[idxB];
+            const spread = lerp(sA.spread, sB.spread, blend);
+            const turb   = lerp(sA.turb,   sB.turb,  blend);
+            const cr     = lerp(sA.col[0], sB.col[0], blend);
+            const cg     = lerp(sA.col[1], sB.col[1], blend);
+            const cb     = lerp(sA.col[2], sB.col[2], blend);
+
+            // ── Label — fade-swap on dominant state change ──────────────
+            const domIdx = blend < 0.5 ? idxA : idxB;
+            if (domIdx !== labelIdx) {
+                labelIdx = domIdx;
+                stateLabel.style.opacity = '0';
+                clearTimeout(labelTimer);
+                labelTimer = setTimeout(() => {
+                    stateLabel.textContent = STATES[domIdx].name;
+                    stateLabel.style.opacity = '1';
+                    stateDots.querySelectorAll('.demo-state-dot').forEach((d, i) => {
+                        d.classList.toggle('active', i === domIdx % 4);
+                    });
+                }, 200);
+            }
+
+            // ── Grid dots ───────────────────────────────────────────────
+            const lerpF = 0.045 + spread * 0.012;   // faster lerp for chaotic states
+
             dots.forEach(dot => {
-                const ox = parseFloat(dot.dataset.cx);
-                const oy = parseFloat(dot.dataset.cy);
-                const dx = ox - cx;
-                const dy = oy - cy;
-                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                const s = state.spread;
-                const tx = ox + dx * (s - 1) * 0.45 + (Math.random() - 0.5) * (state.spread * 6);
-                const ty = oy + dy * (s - 1) * 0.45 + (Math.random() - 0.5) * (state.spread * 6);
-                dot.style.left   = tx + 'px';
-                dot.style.top    = ty + 'px';
-                dot.style.width  = dot.style.height = state.size + 'px';
-                dot.style.background = state.color;
-                dot.style.transitionDuration = state.speed + 's';
-                dot.style.opacity = 0.5 + Math.random() * 0.5;
+                const dx  = dot.ox - p.x;
+                const dy  = dot.oy - p.y;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+                const inf  = Math.max(0, 1 - dist / 105);  // influence radius 105 px
+
+                // Target position: origin + state-driven displacement
+                let tx = dot.ox + dx * (spread - 1) * inf;
+                let ty = dot.oy + dy * (spread - 1) * inf;
+
+                // Turbulence overlay (zero for Glide, max for Slash)
+                if (turb > 0.05) {
+                    tx += Math.sin(t * 4.2 + dot.ox * 0.14 + dot.oy * 0.09) * turb * 13 * inf;
+                    ty += Math.cos(t * 3.8 + dot.oy * 0.14 + dot.ox * 0.07) * turb * 13 * inf;
+                }
+
+                // Smooth lerp toward target (all in JS — no CSS transition)
+                dot.cx = lerp(dot.cx, tx, lerpF);
+                dot.cy = lerp(dot.cy, ty, lerpF);
+
+                const size  = 6  + inf * spread * 3.5;
+                const alpha = 0.28 + inf * 0.68;
+
+                dot.el.style.transform  = `translate(${dot.cx}px,${dot.cy}px)`;
+                dot.el.style.width      = dot.el.style.height = size + 'px';
+                dot.el.style.background =
+                    `rgba(${cr|0},${cg|0},${cb|0},${alpha.toFixed(2)})`;
             });
+
+            requestAnimationFrame(loop);
         }
 
-        // Cycle through states
-        function nextState() {
-            applyState(STATES[stateIdx % STATES.length]);
-            stateIdx++;
-        }
-
-        applyState(STATES[0]);
-        setInterval(nextState, 3200);
+        loop();
     })();
 
     // ── Scroll reveal ──────────────────────────────────────────────────
