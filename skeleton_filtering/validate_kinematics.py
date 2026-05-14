@@ -1,8 +1,7 @@
 """
 Validates kinematic noise reduction and LMA metric extraction across all 38 joints.
 Applies the 1 Euro Filter to raw 3D coordinates based on dynamic CLI parameters.
-Computes the LMA Expansiveness proxy utilizing the core spatial bounding
-volume (maximum distance from spine_2 to distal wrists).
+Generates stacked subplot comparisons for clear Raw vs. Filtered visual validation.
 """
 
 import os
@@ -104,20 +103,11 @@ def main():
     os.makedirs(plot_dir, exist_ok=True)
 
     if not os.path.exists(input_csv):
-        print(
-            f"ERROR: Kinematic data not found at {input_csv}. Re-run extraction pipeline."
-        )
+        print(f"ERROR: Kinematic data not found at {input_csv}.")
         return
 
     df = pd.read_csv(input_csv)
 
-    if target_col not in df.columns:
-        print(
-            f"ERROR: Target column {target_col} missing. Dataset may contain legacy extraction schema."
-        )
-        return
-
-    # Simulation Parameters (30 Hz)
     fps = 30.0
     dt = 1.0 / fps
     timestamps = df["frame_idx"] * dt
@@ -134,7 +124,7 @@ def main():
     filtered_target_data = []
     expansiveness_raw = []
 
-    print(f"Processing 1 Euro filter for {target_col} and generating LMA metrics...")
+    print(f"Processing 1 Euro filter for {target_col} and generating stacked plots...")
 
     for i in range(len(df)):
         t = timestamps.iloc[i]
@@ -172,34 +162,43 @@ def main():
     df["expansiveness_raw"] = expansiveness_raw
 
     # ==========================================
-    # Plot 1: Geometric Noise Reduction (Target)
+    # Plot 1: Stacked Subplot (Raw vs Filtered)
     # ==========================================
     joint_display_name = target_joint.replace("_", " ").title()
     axis_display_name = target_axis.upper()
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(
+    fig, axs = plt.subplots(2, 1, figsize=(12, 8), sharex=True, sharey=True)
+
+    # Top Plot: Raw Data
+    axs[0].plot(
         timestamps,
         df[target_col],
         label=f"Raw Output ({axis_display_name})",
         color="red",
-        alpha=0.4,
-        linewidth=1,
+        alpha=0.8,
+        linewidth=1.2,
     )
-    plt.plot(
+    axs[0].set_title(
+        f"Raw ZED Sensor Data ({joint_display_name} | Axis: {axis_display_name})"
+    )
+    axs[0].set_ylabel("World Coordinate (mm)")
+    axs[0].legend(loc="upper right")
+    axs[0].grid(True, linestyle="--", alpha=0.6)
+
+    # Bottom Plot: Filtered Data
+    axs[1].plot(
         timestamps,
         df[filtered_col],
         label=f"1 Euro Filtered ({axis_display_name})",
         color="blue",
         linewidth=1.5,
     )
-    plt.title(
-        f"Geometric Sensor Noise Reduction ({joint_display_name} | Axis: {axis_display_name})"
-    )
-    plt.xlabel("Time (Seconds)")
-    plt.ylabel("World Coordinate (mm)")
-    plt.legend()
-    plt.grid(True, linestyle="--", alpha=0.6)
+    axs[1].set_title(f"1 Euro Filtered Output")
+    axs[1].set_xlabel("Time (Seconds)")
+    axs[1].set_ylabel("World Coordinate (mm)")
+    axs[1].legend(loc="upper right")
+    axs[1].grid(True, linestyle="--", alpha=0.6)
+
     plt.tight_layout()
     noise_plot_path = os.path.join(
         plot_dir, f"1Euro_noise_reduction_{target_joint}_{target_axis}.png"

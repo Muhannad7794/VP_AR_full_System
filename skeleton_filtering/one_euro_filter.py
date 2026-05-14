@@ -1,12 +1,11 @@
 """
 Implementation of the 1 Euro Filter (Casiez et al., 2012).
 A first-order low-pass filter with an adaptive cutoff frequency.
-Designed specifically to minimize jitter and lag in interactive systems by
-attenuating high-frequency sensor noise at low velocities while
-preserving signal integrity during rapid ballistic movements.
+Updated to gracefully handle NaN values during temporary tracking loss.
 """
 
 import math
+import numpy as np
 
 
 def smoothing_factor(t_e, cutoff):
@@ -38,29 +37,33 @@ class OneEuroFilter:
         self.t_prev = t0
 
     def __call__(self, t, x):
-        """
-        Computes the filtered output for the current time step.
-        :param t: Current timestamp (seconds).
-        :param x: Current noisy sensor reading (mm).
-        :return: Filtered position reading.
-        """
+        # 1. Gracefully handle occlusion drops (NaN) without breaking math state
+        if np.isnan(x):
+            return np.nan
+
+        # 2. Re-initialize if the filter started on a lost frame
+        if np.isnan(self.x_prev):
+            self.x_prev = x
+            self.t_prev = t
+            return x
+
         t_e = t - self.t_prev
         if t_e <= 0.0:
             return x
 
-        # 1. Filter the derivative (velocity)
+        # 3. Filter the derivative (velocity)
         alpha_d = smoothing_factor(t_e, self.d_cutoff)
         dx = (x - self.x_prev) / t_e
         dx_hat = exponential_smoothing(alpha_d, dx, self.dx_prev)
 
-        # 2. Estimate adaptive cutoff frequency based on velocity magnitude
+        # 4. Estimate adaptive cutoff frequency based on velocity magnitude
         cutoff = self.min_cutoff + self.beta * abs(dx_hat)
 
-        # 3. Filter the primary signal
+        # 5. Filter the primary signal
         alpha = smoothing_factor(t_e, cutoff)
         x_hat = exponential_smoothing(alpha, x, self.x_prev)
 
-        # 4. Update states
+        # 6. Update states
         self.x_prev = x_hat
         self.dx_prev = dx_hat
         self.t_prev = t
