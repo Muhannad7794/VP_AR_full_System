@@ -4,41 +4,35 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kinematic AR — VP System</title>
+    <title>Base-Free Tracking, Depth Occlusion & Embodied AR — VP System</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-        href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap"
-        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
     <style>
         /* ─── Reset & Base ──────────────────────────────────────────────── */
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg: #0c0d0f;
-            --surface: #131518;
-            --border: #22262d;
-            --gold: #c9a84c;
+            --bg:       #0c0d0f;
+            --surface:  #131518;
+            --surface2: #181b1f;
+            --border:   #22262d;
+            --border2:  #2d3340;
+            --gold:     #c9a84c;
             --gold-dim: #7a6030;
-            --text: #d4cfc8;
-            --muted: #6b6860;
-            --accent: #4a7fa5;
-            --accent2: #7a4a9a;
+            --text:     #d4cfc8;
+            --muted:    #6b6860;
+            --accent:   #4a7fa5;
+            --accent2:  #7a4a9a;
+            --cyan:     #3d9ea0;
+            --emerald:  #4a8a5a;
             --mono: 'DM Mono', monospace;
             --serif: 'DM Serif Display', serif;
             --sans: 'DM Sans', sans-serif;
             --radius: 4px;
         }
 
-        html {
-            scroll-behavior: smooth;
-        }
+        html { scroll-behavior: smooth; }
 
         body {
             background: var(--bg);
@@ -50,7 +44,7 @@
             overflow-x: hidden;
         }
 
-        /* ─── Noise overlay ─────────────────────────────────────────────── */
+        /* ─── Film grain overlay ────────────────────────────────────────── */
         body::before {
             content: '';
             position: fixed;
@@ -58,12 +52,12 @@
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
             pointer-events: none;
             z-index: 0;
-            opacity: 0.6;
+            opacity: 0.5;
         }
 
         /* ─── Layout ────────────────────────────────────────────────────── */
         .container {
-            max-width: 860px;
+            max-width: 920px;
             margin: 0 auto;
             padding: 0 32px;
             position: relative;
@@ -76,8 +70,8 @@
             top: 0;
             z-index: 100;
             border-bottom: 1px solid var(--border);
-            background: rgba(12, 13, 15, 0.92);
-            backdrop-filter: blur(12px);
+            background: rgba(29, 30, 32, 0.94);
+            backdrop-filter: blur(16px);
         }
 
         nav .container {
@@ -99,7 +93,7 @@
 
         .nav-links {
             display: flex;
-            gap: 28px;
+            gap: 24px;
             list-style: none;
         }
 
@@ -113,15 +107,26 @@
             transition: color 0.2s;
         }
 
-        .nav-links a:hover {
-            color: var(--text);
-        }
+        .nav-links a:hover { color: var(--text); }
 
         /* ─── Hero ──────────────────────────────────────────────────────── */
         .hero {
-            padding: 100px 0 80px;
+            padding: 110px 0 90px;
             border-bottom: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
         }
+
+        #heroCanvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .hero .container { z-index: 1; }
 
         .hero-label {
             font-family: var(--mono);
@@ -129,7 +134,7 @@
             color: var(--gold);
             letter-spacing: 0.16em;
             text-transform: uppercase;
-            margin-bottom: 24px;
+            margin-bottom: 28px;
             display: flex;
             align-items: center;
             gap: 12px;
@@ -145,25 +150,23 @@
 
         h1 {
             font-family: var(--serif);
-            font-size: clamp(36px, 6vw, 58px);
+            font-size: clamp(34px, 5.5vw, 56px);
             font-weight: 400;
             line-height: 1.1;
             color: #f0ebe2;
-            margin-bottom: 12px;
+            margin-bottom: 14px;
         }
 
-        h1 em {
-            font-style: italic;
-            color: var(--gold);
-        }
+        h1 em { font-style: italic; color: var(--gold); }
 
         .hero-sub {
             font-family: var(--sans);
-            font-size: 17px;
+            font-size: 16px;
             font-weight: 300;
             color: var(--muted);
             margin-bottom: 40px;
-            max-width: 560px;
+            max-width: 580px;
+            line-height: 1.75;
         }
 
         .hero-meta {
@@ -182,14 +185,45 @@
             letter-spacing: 0.06em;
         }
 
-        .tag.gold {
-            border-color: var(--gold-dim);
-            color: var(--gold);
+        .tag.gold  { border-color: var(--gold-dim);   color: var(--gold); }
+        .tag.cyan  { border-color: #2a6a6c;           color: var(--cyan); }
+        .tag.blue  { border-color: #2a4f6c;           color: var(--accent); }
+        .tag.purple{ border-color: #4a2a6c;           color: var(--accent2); }
+
+        /* ─── Scroll indicator ──────────────────────────────────────────── */
+        .scroll-hint {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 56px;
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--border2);
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            animation: hint-fade 3s ease-in-out infinite;
+        }
+
+        .scroll-hint-line {
+            width: 24px;
+            height: 1px;
+            background: var(--border2);
+            animation: scroll-line 3s ease-in-out infinite;
+        }
+
+        @keyframes hint-fade {
+            0%, 100% { opacity: 0.5; }
+            50%       { opacity: 1; }
+        }
+
+        @keyframes scroll-line {
+            0%, 100% { width: 16px; }
+            50%       { width: 32px; }
         }
 
         /* ─── Section structure ─────────────────────────────────────────── */
         section {
-            padding: 80px 0;
+            padding: 88px 0;
             border-bottom: 1px solid var(--border);
         }
 
@@ -212,9 +246,14 @@
             background: var(--border);
         }
 
+        .section-label.cyan   { color: var(--cyan); }
+        .section-label.blue   { color: var(--accent); }
+        .section-label.purple { color: var(--accent2); }
+        .section-label.green  { color: var(--emerald); }
+
         h2 {
             font-family: var(--serif);
-            font-size: 32px;
+            font-size: clamp(26px, 4vw, 36px);
             font-weight: 400;
             color: #f0ebe2;
             margin-bottom: 20px;
@@ -223,40 +262,54 @@
 
         h3 {
             font-family: var(--sans);
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.12em;
             text-transform: uppercase;
             color: var(--text);
             margin-bottom: 12px;
-            margin-top: 36px;
+            margin-top: 40px;
         }
 
         p {
             color: var(--text);
             margin-bottom: 16px;
-            max-width: 680px;
+            max-width: 700px;
         }
 
         /* ─── Pillars grid ──────────────────────────────────────────────── */
         .pillars {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 1px;
             background: var(--border);
             border: 1px solid var(--border);
-            margin-top: 40px;
+            margin-top: 44px;
         }
 
         .pillar {
             background: var(--surface);
-            padding: 28px 24px;
+            padding: 28px 22px;
+            position: relative;
+            overflow: hidden;
         }
+
+        .pillar::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 2px;
+        }
+
+        .pillar:nth-child(1)::before { background: var(--gold); }
+        .pillar:nth-child(2)::before { background: var(--cyan); }
+        .pillar:nth-child(3)::before { background: var(--accent); }
+        .pillar:nth-child(4)::before { background: var(--accent2); }
 
         .pillar-number {
             font-family: var(--mono);
             font-size: 10px;
-            color: var(--gold);
+            color: var(--muted);
             letter-spacing: 0.12em;
             margin-bottom: 14px;
         }
@@ -267,6 +320,7 @@
             font-weight: 400;
             color: #f0ebe2;
             margin-bottom: 10px;
+            line-height: 1.3;
         }
 
         .pillar p {
@@ -277,6 +331,408 @@
             margin: 0;
         }
 
+        /* ─── Pipeline flow ─────────────────────────────────────────────── */
+        .pipeline-flow {
+            margin-top: 52px;
+            display: grid;
+            grid-template-columns: 1fr 48px 1fr 48px 1fr 48px 1fr;
+            align-items: center;
+            gap: 0;
+        }
+
+        .pipeline-node {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 24px 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pipeline-node::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 2px;
+        }
+
+        .pipeline-node.p1::before { background: var(--gold); }
+        .pipeline-node.p2::before { background: var(--cyan); }
+        .pipeline-node.p3::before { background: var(--accent); }
+        .pipeline-node.p4::before { background: var(--accent2); }
+
+        .pipeline-num {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .pipeline-node h4 {
+            font-family: var(--serif);
+            font-size: 17px;
+            font-weight: 400;
+            color: #f0ebe2;
+            margin-bottom: 10px;
+            line-height: 1.3;
+        }
+
+        .pipeline-techs {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+
+        .pipeline-tech {
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 0.06em;
+        }
+
+        .pipeline-tech::before {
+            content: '→ ';
+            color: var(--border2);
+        }
+
+        .pipeline-output {
+            font-family: var(--mono);
+            font-size: 10px;
+            padding: 6px 10px;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid var(--border);
+            color: var(--gold);
+            letter-spacing: 0.06em;
+            margin-top: 12px;
+        }
+
+        .pipeline-connector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 120px;
+        }
+
+        .pipeline-connector svg {
+            overflow: visible;
+        }
+
+        /* ─── Stat row ──────────────────────────────────────────────────── */
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            margin: 36px 0 32px;
+        }
+
+        .stat-box {
+            background: var(--surface);
+            padding: 22px 24px;
+        }
+
+        .stat-value {
+            font-family: var(--serif);
+            font-size: 34px;
+            color: var(--gold);
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+
+        .stat-value.cyan   { color: var(--cyan); }
+        .stat-value.blue   { color: var(--accent); }
+        .stat-value.purple { color: var(--accent2); }
+
+        .stat-label {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        /* ─── Alignment section ─────────────────────────────────────────── */
+        .alignment-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            margin-top: 48px;
+            align-items: start;
+        }
+
+        .alignment-block h3 {
+            margin-top: 0;
+            margin-bottom: 14px;
+            font-size: 11px;
+        }
+
+        /* ─── Data panel (plot display) ─────────────────────────────────── */
+        .data-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            margin-top: 16px;
+            position: relative;
+        }
+
+        .data-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 9px 16px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255,255,255,0.018);
+        }
+
+        .data-panel-title {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--gold);
+        }
+
+        .data-panel-title.cyan   { color: var(--cyan); }
+        .data-panel-title.blue   { color: var(--accent); }
+
+        .data-panel-badge {
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 0.06em;
+        }
+
+        .data-panel img {
+            width: 100%;
+            display: block;
+        }
+
+        .data-panel-caption {
+            padding: 10px 16px;
+            font-family: var(--sans);
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.55;
+            border-top: 1px solid var(--border);
+            font-style: italic;
+        }
+
+        .plots-pair {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            background: var(--border);
+            margin-top: 16px;
+        }
+
+        .plots-pair .data-panel {
+            margin-top: 0;
+            border: none;
+        }
+
+        .plots-pair-wrapper {
+            border: 1px solid var(--border);
+            margin-top: 16px;
+            overflow: hidden;
+        }
+
+        .plots-pair-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 9px 16px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255,255,255,0.018);
+        }
+
+        /* ─── Kinematic skeleton ────────────────────────────────────────── */
+        .kinematic-grid {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 32px;
+            margin-top: 48px;
+            align-items: start;
+        }
+
+        .skeleton-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .skeleton-panel-header {
+            padding: 9px 16px;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--accent);
+            background: rgba(255,255,255,0.018);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .skeleton-svg-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px 16px 16px;
+            flex: 1;
+        }
+
+        .skeleton-panel-footer {
+            padding: 10px 16px;
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--muted);
+            border-top: 1px solid var(--border);
+            letter-spacing: 0.06em;
+            text-align: center;
+        }
+
+        /* Skeleton SVG animations */
+        .sk-bone { stroke: rgba(74,127,165,0.25); stroke-width: 1.5; fill: none; }
+        .sk-joint { fill: var(--accent); opacity: 0.7; }
+        .sk-joint-key { fill: var(--gold); opacity: 0.9; }
+        .sk-joint-head { fill: #d4cfc8; opacity: 0.6; }
+
+        .sk-joint      { animation: jPulse 3.2s ease-in-out infinite; }
+        .sk-joint-key  { animation: jPulseKey 2.4s ease-in-out infinite; }
+        .sk-joint:nth-child(odd)  { animation-delay: 0.4s; }
+        .sk-joint:nth-child(even) { animation-delay: 0.8s; }
+
+        @keyframes jPulse {
+            0%,100% { opacity: 0.4; r: 2.2; }
+            50%      { opacity: 0.9; r: 3.2; }
+        }
+
+        @keyframes jPulseKey {
+            0%,100% { opacity: 0.7; r: 3; }
+            50%      { opacity: 1;   r: 4.5; }
+        }
+
+        .sk-sway {
+            transform-origin: 100px 148px;
+            animation: skSway 6s ease-in-out infinite;
+        }
+
+        @keyframes skSway {
+            0%,100% { transform: rotate(0deg); }
+            25%      { transform: rotate(0.8deg); }
+            75%      { transform: rotate(-0.8deg); }
+        }
+
+        /* Wrist reach animation */
+        .sk-reach-left {
+            animation: skReachL 5s ease-in-out infinite;
+        }
+
+        .sk-reach-right {
+            animation: skReachR 5s ease-in-out infinite 0.5s;
+        }
+
+        @keyframes skReachL {
+            0%,100% { transform: translate(0,0); }
+            40%      { transform: translate(-6px, -8px); }
+        }
+
+        @keyframes skReachR {
+            0%,100% { transform: translate(0,0); }
+            40%      { transform: translate(6px, -8px); }
+        }
+
+        .kinematic-plots { display: flex; flex-direction: column; gap: 20px; }
+
+        /* ─── Signal wave mini-viz ──────────────────────────────────────── */
+        .signal-viz-wrap {
+            margin: 36px 0 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .signal-viz-header {
+            padding: 9px 16px;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--accent);
+            display: flex;
+            justify-content: space-between;
+            background: rgba(255,255,255,0.018);
+        }
+
+        .signal-viz-canvas {
+            display: block;
+            width: 100%;
+            height: 90px;
+            background: var(--bg);
+        }
+
+        .signal-viz-footer {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .signal-legend {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 0.06em;
+        }
+
+        .signal-legend-dot {
+            width: 8px;
+            height: 2px;
+            border-radius: 1px;
+        }
+
+        /* ─── Filter param table ────────────────────────────────────────── */
+        .param-table {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            margin-top: 28px;
+        }
+
+        .param-row {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            background: var(--surface);
+            align-items: start;
+            padding: 14px 18px;
+            gap: 16px;
+        }
+
+        .param-name {
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--accent);
+            letter-spacing: 0.06em;
+            padding-top: 1px;
+        }
+
+        .param-desc {
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
         /* ─── Descriptor cards ──────────────────────────────────────────── */
         .descriptors {
             display: grid;
@@ -284,7 +740,7 @@
             gap: 1px;
             background: var(--border);
             border: 1px solid var(--border);
-            margin-top: 40px;
+            margin-top: 44px;
         }
 
         .desc-card {
@@ -292,32 +748,25 @@
             padding: 28px 26px;
             position: relative;
             overflow: hidden;
+            transition: background 0.3s;
         }
+
+        .desc-card:hover { background: var(--surface2); }
 
         .desc-card::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 3px;
-            height: 100%;
+            top: 0; left: 0;
+            width: 3px; height: 100%;
+            transition: width 0.3s;
         }
 
-        .desc-card.effort::before {
-            background: #c9a84c;
-        }
+        .desc-card:hover::before { width: 5px; }
 
-        .desc-card.expand::before {
-            background: #4a7fa5;
-        }
-
-        .desc-card.weight::before {
-            background: #7a4a9a;
-        }
-
-        .desc-card.flow::before {
-            background: #4a8a5a;
-        }
+        .desc-card.effort::before { background: var(--gold); }
+        .desc-card.expand::before { background: var(--accent); }
+        .desc-card.weight::before { background: var(--accent2); }
+        .desc-card.flow::before   { background: var(--emerald); }
 
         .desc-lma {
             font-family: var(--mono);
@@ -349,13 +798,11 @@
             font-size: 11px;
             color: var(--muted);
             padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(255,255,255,0.03);
             border: 1px solid var(--border);
         }
 
-        .desc-output span {
-            color: var(--gold);
-        }
+        .desc-output span { color: var(--gold); }
 
         /* ─── Action drives table ───────────────────────────────────────── */
         .drives-grid {
@@ -364,7 +811,7 @@
             gap: 1px;
             background: var(--border);
             border: 1px solid var(--border);
-            margin-top: 40px;
+            margin-top: 44px;
         }
 
         .drive-header {
@@ -407,7 +854,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 32px;
-            margin-top: 40px;
+            margin-top: 44px;
             align-items: start;
         }
 
@@ -422,45 +869,28 @@
             overflow: hidden;
         }
 
-        /* Animated cube grid illustration */
+        .demo-visual-label {
+            position: absolute;
+            top: 12px; left: 16px;
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
         .cube-grid {
             position: relative;
-            width: 200px;
-            height: 200px;
+            width: 216px;
+            height: 216px;
         }
 
         .cube-dot {
             position: absolute;
-            width: 8px;
-            height: 8px;
-            background: var(--gold);
-            opacity: 0.6;
-            animation: pulse 2.4s ease-in-out infinite;
-        }
-
-        .cube-dot:nth-child(odd) {
-            animation-delay: calc(var(--i) * 0.15s);
-            opacity: 0.3;
-            background: var(--accent);
-        }
-
-        .cube-dot:nth-child(even) {
-            animation-delay: calc(var(--i) * 0.2s);
-            opacity: 0.5;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                transform: scale(1);
-                opacity: 0.4;
-            }
-
-            50% {
-                transform: scale(1.6);
-                opacity: 0.9;
-            }
+            border-radius: 1px;
+            transition: transform 0.8s cubic-bezier(0.34,1.56,0.64,1),
+                        opacity 0.4s ease,
+                        background 0.6s ease;
         }
 
         .performer-dot {
@@ -468,17 +898,57 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 16px;
-            height: 16px;
+            width: 12px;
+            height: 12px;
             background: #f0ebe2;
             border-radius: 50%;
             z-index: 2;
-            box-shadow: 0 0 24px rgba(201, 168, 76, 0.6);
+            box-shadow: 0 0 0 2px rgba(201,168,76,0.3),
+                        0 0 20px rgba(201,168,76,0.4);
+            animation: perfPulse 2s ease-in-out infinite;
         }
+
+        @keyframes perfPulse {
+            0%,100% { box-shadow: 0 0 0 2px rgba(201,168,76,0.3), 0 0 16px rgba(201,168,76,0.3); }
+            50%      { box-shadow: 0 0 0 4px rgba(201,168,76,0.15), 0 0 28px rgba(201,168,76,0.5); }
+        }
+
+        .demo-state-bar {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            background: rgba(12,13,15,0.8);
+            border-top: 1px solid var(--border);
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .demo-state-label {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--gold);
+        }
+
+        .demo-state-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .demo-state-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--border);
+        }
+
+        .demo-state-dot.active { background: var(--gold); }
 
         .demo-description p {
             font-size: 14px;
-            line-height: 1.7;
+            line-height: 1.72;
             margin-bottom: 14px;
             max-width: none;
         }
@@ -486,68 +956,11 @@
         .demo-note {
             border-left: 2px solid var(--gold);
             padding: 12px 16px;
-            background: rgba(201, 168, 76, 0.04);
+            background: rgba(201,168,76,0.04);
             font-size: 13px;
             color: var(--muted);
             font-style: italic;
             margin-top: 20px;
-        }
-
-        /* ─── Smoothing models ──────────────────────────────────────────── */
-        .models-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1px;
-            background: var(--border);
-            border: 1px solid var(--border);
-            margin-top: 40px;
-        }
-
-        .model-card {
-            background: var(--surface);
-            padding: 28px 24px;
-        }
-
-        .model-tag {
-            font-family: var(--mono);
-            font-size: 10px;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: var(--muted);
-            margin-bottom: 10px;
-        }
-
-        .model-card h4 {
-            font-family: var(--serif);
-            font-size: 20px;
-            font-weight: 400;
-            color: #f0ebe2;
-            margin-bottom: 10px;
-        }
-
-        .model-card p {
-            font-size: 13px;
-            color: var(--muted);
-            line-height: 1.6;
-            max-width: none;
-            margin-bottom: 14px;
-        }
-
-        .model-lma {
-            font-family: var(--mono);
-            font-size: 11px;
-            padding: 6px 10px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border);
-            color: var(--gold);
-            margin-bottom: 10px;
-            display: block;
-        }
-
-        .model-dance {
-            font-size: 12px;
-            color: var(--muted);
-            font-style: italic;
         }
 
         /* ─── Repos section ─────────────────────────────────────────────── */
@@ -557,7 +970,7 @@
             gap: 1px;
             background: var(--border);
             border: 1px solid var(--border);
-            margin-top: 40px;
+            margin-top: 44px;
         }
 
         .repo-row {
@@ -571,74 +984,28 @@
             transition: background 0.15s;
         }
 
-        .repo-row:hover {
-            background: #181c20;
-        }
+        .repo-row:hover { background: var(--surface2); }
 
-        .repo-name {
-            font-family: var(--mono);
-            font-size: 12px;
-            color: var(--gold);
-            letter-spacing: 0.06em;
-        }
+        .repo-name  { font-family: var(--mono); font-size: 12px; color: var(--gold); letter-spacing: 0.06em; }
+        .repo-desc  { font-size: 13px; color: var(--muted); }
+        .repo-arrow { font-family: var(--mono); font-size: 12px; color: var(--border); transition: color 0.15s; }
 
-        .repo-desc {
-            font-size: 13px;
-            color: var(--muted);
-        }
-
-        .repo-arrow {
-            font-family: var(--mono);
-            font-size: 12px;
-            color: var(--border);
-            transition: color 0.15s;
-        }
-
-        .repo-row:hover .repo-arrow {
-            color: var(--gold);
-        }
+        .repo-row:hover .repo-arrow { color: var(--gold); }
 
         /* ─── References ────────────────────────────────────────────────── */
-        .refs {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            margin-top: 32px;
-        }
+        .refs { display: flex; flex-direction: column; gap: 14px; margin-top: 32px; }
 
-        .ref {
-            display: grid;
-            grid-template-columns: 28px 1fr;
-            gap: 12px;
-            align-items: start;
-        }
+        .ref { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start; }
 
-        .ref-num {
-            font-family: var(--mono);
-            font-size: 11px;
-            color: var(--gold);
-            padding-top: 2px;
-        }
+        .ref-num { font-family: var(--mono); font-size: 11px; color: var(--gold); padding-top: 2px; }
 
-        .ref-text {
-            font-size: 13px;
-            color: var(--muted);
-            line-height: 1.6;
-        }
+        .ref-text { font-size: 13px; color: var(--muted); line-height: 1.6; }
 
-        .ref-text a {
-            color: var(--accent);
-            text-decoration: none;
-        }
-
-        .ref-text a:hover {
-            text-decoration: underline;
-        }
+        .ref-text a { color: var(--accent); text-decoration: none; }
+        .ref-text a:hover { text-decoration: underline; }
 
         /* ─── Footer ────────────────────────────────────────────────────── */
-        footer {
-            padding: 48px 0;
-        }
+        footer { padding: 48px 0; }
 
         footer .container {
             display: flex;
@@ -656,31 +1023,29 @@
         .footer-right {
             font-family: var(--mono);
             font-size: 10px;
-            color: var(--border);
+            color: var(--border2);
             letter-spacing: 0.1em;
             text-transform: uppercase;
+            text-align: right;
+            line-height: 1.8;
         }
 
         /* ─── Utilities ─────────────────────────────────────────────────── */
-        .spacer {
-            height: 24px;
-        }
-
         code {
             font-family: var(--mono);
             font-size: 12px;
             padding: 2px 7px;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255,255,255,0.05);
             border: 1px solid var(--border);
             color: var(--gold);
             border-radius: var(--radius);
         }
 
-        /* ─── Fade-in on scroll ─────────────────────────────────────────── */
+        /* ─── Reveal on scroll ──────────────────────────────────────────── */
         .reveal {
             opacity: 0;
-            transform: translateY(24px);
-            transition: opacity 0.6s ease, transform 0.6s ease;
+            transform: translateY(20px);
+            transition: opacity 0.65s ease, transform 0.65s ease;
         }
 
         .reveal.visible {
@@ -688,31 +1053,30 @@
             transform: translateY(0);
         }
 
+        .reveal-delay-1 { transition-delay: 0.1s; }
+        .reveal-delay-2 { transition-delay: 0.2s; }
+        .reveal-delay-3 { transition-delay: 0.3s; }
+        .reveal-delay-4 { transition-delay: 0.4s; }
+
         /* ─── Responsive ────────────────────────────────────────────────── */
-        @media (max-width: 700px) {
-
-            .pillars,
-            .descriptors,
-            .drives-grid,
-            .models-grid {
+        @media (max-width: 800px) {
+            .pillars      { grid-template-columns: repeat(2, 1fr); }
+            .pipeline-flow {
                 grid-template-columns: 1fr;
+                grid-template-rows: auto;
             }
-
-            .demo-layout {
-                grid-template-columns: 1fr;
-            }
-
-            .repo-row {
-                grid-template-columns: 1fr;
-            }
-
-            .repo-arrow {
-                display: none;
-            }
-
-            .nav-links {
-                display: none;
-            }
+            .pipeline-connector { display: none; }
+            .alignment-grid { grid-template-columns: 1fr; }
+            .kinematic-grid { grid-template-columns: 1fr; }
+            .plots-pair { grid-template-columns: 1fr; }
+            .descriptors  { grid-template-columns: 1fr; }
+            .drives-grid  { grid-template-columns: 1fr; }
+            .demo-layout  { grid-template-columns: 1fr; }
+            .stat-row     { grid-template-columns: 1fr; }
+            .repo-row     { grid-template-columns: 1fr; }
+            .repo-arrow   { display: none; }
+            .nav-links    { display: none; }
+            .pipeline-flow .pipeline-node { margin-bottom: 1px; }
         }
     </style>
 </head>
@@ -724,10 +1088,11 @@
         <div class="container">
             <a class="nav-brand" href="#">VP / AR / EI System</a>
             <ul class="nav-links">
-                <li><a href="#system">System</a></li>
-                <li><a href="#descriptors">Descriptors</a></li>
-                <li><a href="#demo">Demo</a></li>
-                <li><a href="#smoothing">Smoothing</a></li>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#pipeline">Pipeline</a></li>
+                <li><a href="#alignment">Alignment</a></li>
+                <li><a href="#kinematic">Kinematic</a></li>
+                <li><a href="#embodied">Embodied</a></li>
                 <li><a href="#repos">Repos</a></li>
             </ul>
         </div>
@@ -735,75 +1100,522 @@
 
     <!-- ── Hero ─────────────────────────────────────────────────────── -->
     <div class="hero">
+        <canvas id="heroCanvas"></canvas>
         <div class="container">
-            <div class="hero-label">Medialogy MSc — Aalborg University Copenhagen</div>
-            <h1>Kinematic <em>AR</em><br>for Virtual Production</h1>
+            <div class="hero-label">Virtual Production — Medialogy MSc · Aalborg University Copenhagen</div>
+            <h1>Base-Free Tracking,<br>Depth <em>Occlusion</em><br>&amp; Embodied <em>AR</em></h1>
             <p class="hero-sub">
-                Modulating CG elements in a live LED volume through the expressive
-                quality of human movement — grounded in Laban Movement Analysis.
+                Synchronizing two cameras across time and space. Extracting and denoising a performer's
+                38-joint skeleton from raw depth data. Then driving a live LED volume not through
+                position — but through the expressive quality of movement itself.
             </p>
             <div class="hero-meta">
                 <span class="tag gold">Embodied Interaction</span>
-                <span class="tag">Virtual Production</span>
-                <span class="tag">ZED 2i · Body_38</span>
-                <span class="tag">Unreal Engine 5</span>
+                <span class="tag">ZED 2i · Sony α</span>
+                <span class="tag cyan">ResNet · DTW</span>
+                <span class="tag cyan">ChArUco · Stereo</span>
+                <span class="tag blue">BODY_38 · 1 Euro Filter</span>
                 <span class="tag">LMA · Effort Theory</span>
+                <span class="tag purple">Unreal Engine 5</span>
                 <span class="tag">Muhannad Al Ulaby · 2026</span>
+            </div>
+            <div class="scroll-hint">
+                <div class="scroll-hint-line"></div>
+                Scroll to explore
             </div>
         </div>
     </div>
 
-    <!-- ── System Overview ──────────────────────────────────────────── -->
-    <section id="system">
+    <!-- ── 01 — Overview ────────────────────────────────────────────── -->
+    <section id="overview">
         <div class="container">
-            <div class="section-label">01 — Overview</div>
-            <h2>Three Systems,<br>One Composited Frame</h2>
+            <div class="section-label">01 — System Overview</div>
+            <h2>Four Technical Phases,<br>One Composited Frame</h2>
             <p>
-                The project establishes a real-time Virtual Production pipeline in which
-                three independent technical layers operate simultaneously and are visible
-                in a single composited output frame. Each layer builds on the previous:
-                depth-correct occlusion requires camera tracking; embodied interaction
-                requires the calibrated skeletal stream that occlusion depends on.
+                The project establishes a complete Virtual Production pipeline in which two physically
+                co-located cameras — a Sony α mirrorless and a ZED 2i depth camera — are first
+                synchronized in time, then calibrated in space, and finally used as the perceptual
+                substrate for a live AR performance system. Each phase produces outputs that the
+                next phase requires: nothing in the runtime exists without the offline pipeline.
+            </p>
+            <p>
+                The visible result is a live composited frame in which a performer stands in front
+                of physics-driven CG objects that correctly occlude and are occluded by their body,
+                while the expressive quality of their movement — not their position — continuously
+                reshapes the virtual environment around them.
             </p>
             <div class="pillars reveal">
                 <div class="pillar">
-                    <div class="pillar-number">01 / SIGNAL PROCESSING</div>
-                    <h4>Camera Tracking &amp; Occlusion</h4>
-                    <p>Base-free 6-DoF camera tracking via ZED SLAM. Per-pixel depth-correct
-                        AR occlusion through a Spout-streamed depth map reprojected into
-                        UE5 Composure. Stencil-based edge softness per AR object.</p>
+                    <div class="pillar-number">01 / TEMPORAL</div>
+                    <h4>Camera Sync</h4>
+                    <p>ResNet visual feature extraction and Dynamic Time Warping align two independently
+                        clocked cameras frame-by-frame. Savitzky-Golay smoothing absorbs hardware
+                        clock drift before synced frames are written.</p>
                 </div>
                 <div class="pillar">
-                    <div class="pillar-number">02 / KINEMATIC EXTRACTION</div>
-                    <h4>Skeletal Denoising</h4>
-                    <p>ZED BODY_38 38-joint tracking at 30 Hz. 1 Euro Filter applied
-                        per-joint to suppress geometric sensor noise while preserving
-                        transient dynamics. LMA Expansiveness metric computed offline
-                        as analytical validation.</p>
+                    <div class="pillar-number">02 / SPATIAL</div>
+                    <h4>Stereo Calibration</h4>
+                    <p>ChArUco-board stereo calibration computes the intrinsic matrices and the
+                        extrinsic transform between the Sony and ZED optical centres. The resulting
+                        UE5 offset is applied to a CineCamera actor at startup.</p>
                 </div>
                 <div class="pillar">
-                    <div class="pillar-number">03 / EMBODIED INTERACTION</div>
+                    <div class="pillar-number">03 / KINEMATIC</div>
+                    <h4>Skeleton Denoising</h4>
+                    <p>ZED BODY_38 yields 38-joint 3D coordinates at 30 Hz. The 1 Euro Filter
+                        suppresses geometric sensor noise per-joint before any LMA descriptor
+                        is computed from the stream.</p>
+                </div>
+                <div class="pillar">
+                    <div class="pillar-number">04 / EMBODIED</div>
                     <h4>Kinematic AR</h4>
-                    <p>Four LMA Effort descriptors computed from the live skeletal stream
-                        drive CG element behaviour. Movement quality — not position —
-                        modulates the virtual environment. Two switchable operating modes
-                        with no level reload.</p>
+                    <p>Four continuous LMA Effort scalars computed from the denoised skeleton
+                        drive Niagara particle systems and UE5 material WPO deformations.
+                        Movement quality — not position — modulates the virtual environment.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- ── Descriptors ──────────────────────────────────────────────── -->
-    <section id="descriptors">
+    <!-- ── 02 — Pipeline ────────────────────────────────────────────── -->
+    <section id="pipeline">
         <div class="container">
-            <div class="section-label">02 — LMA Descriptors</div>
+            <div class="section-label cyan">02 — The Pipeline</div>
+            <h2>From Raw Footage<br>to Live AR Performance</h2>
+            <p>
+                Phases 1 through 3 are an offline pre-production pipeline. They transform raw
+                camera recordings into calibration data and a clean kinematic signal. Phase 4
+                is the real-time runtime that consumes those outputs. The two halves are
+                decoupled — calibration runs once per recording setup; the runtime runs at every performance.
+            </p>
+            <div class="pipeline-flow reveal">
+
+                <!-- Phase 01 -->
+                <div class="pipeline-node p1">
+                    <div class="pipeline-num">Phase 01 — Offline</div>
+                    <h4>Temporal Alignment</h4>
+                    <div class="pipeline-techs">
+                        <span class="pipeline-tech">ResNet visual feature extraction</span>
+                        <span class="pipeline-tech">Dynamic Time Warping (FastDTW)</span>
+                        <span class="pipeline-tech">Savitzky-Golay smoothing</span>
+                    </div>
+                    <div class="pipeline-output">→ Synced frame pairs</div>
+                </div>
+
+                <!-- Connector 1→2 -->
+                <div class="pipeline-connector">
+                    <svg width="48" height="40" viewBox="0 0 48 40">
+                        <line x1="4" y1="20" x2="44" y2="20" stroke="#22262d" stroke-width="1"/>
+                        <circle r="3" fill="#c9a84c" opacity="0.8">
+                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0s" path="M4,20 L44,20"/>
+                        </circle>
+                        <circle r="3" fill="#c9a84c" opacity="0.5">
+                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.37s" path="M4,20 L44,20"/>
+                        </circle>
+                        <circle r="3" fill="#c9a84c" opacity="0.25">
+                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.74s" path="M4,20 L44,20"/>
+                        </circle>
+                    </svg>
+                </div>
+
+                <!-- Phase 02 -->
+                <div class="pipeline-node p2">
+                    <div class="pipeline-num">Phase 02 — Offline</div>
+                    <h4>Spatial Calibration</h4>
+                    <div class="pipeline-techs">
+                        <span class="pipeline-tech">ChArUco corner detection</span>
+                        <span class="pipeline-tech">OpenCV stereo calibration</span>
+                        <span class="pipeline-tech">Reprojection error validation</span>
+                    </div>
+                    <div class="pipeline-output">→ Camera matrices · UE5 offset</div>
+                </div>
+
+                <!-- Connector 2→3 -->
+                <div class="pipeline-connector">
+                    <svg width="48" height="40" viewBox="0 0 48 40">
+                        <line x1="4" y1="20" x2="44" y2="20" stroke="#22262d" stroke-width="1"/>
+                        <circle r="3" fill="#3d9ea0" opacity="0.8">
+                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.2s" path="M4,20 L44,20"/>
+                        </circle>
+                        <circle r="3" fill="#3d9ea0" opacity="0.5">
+                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.57s" path="M4,20 L44,20"/>
+                        </circle>
+                        <circle r="3" fill="#3d9ea0" opacity="0.25">
+                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.94s" path="M4,20 L44,20"/>
+                        </circle>
+                    </svg>
+                </div>
+
+                <!-- Phase 03 -->
+                <div class="pipeline-node p3">
+                    <div class="pipeline-num">Phase 03 — Offline</div>
+                    <h4>Kinematic Extraction</h4>
+                    <div class="pipeline-techs">
+                        <span class="pipeline-tech">ZED SDK BODY_38 tracking</span>
+                        <span class="pipeline-tech">1 Euro Filter — per-joint</span>
+                        <span class="pipeline-tech">LMA Expansiveness metric</span>
+                    </div>
+                    <div class="pipeline-output">→ Denoised 38-joint stream</div>
+                </div>
+
+                <!-- Connector 3→4 -->
+                <div class="pipeline-connector">
+                    <svg width="48" height="40" viewBox="0 0 48 40">
+                        <line x1="4" y1="20" x2="44" y2="20" stroke="#22262d" stroke-width="1"/>
+                        <circle r="3" fill="#4a7fa5" opacity="0.8">
+                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.1s" path="M4,20 L44,20"/>
+                        </circle>
+                        <circle r="3" fill="#4a7fa5" opacity="0.5">
+                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.47s" path="M4,20 L44,20"/>
+                        </circle>
+                        <circle r="3" fill="#4a7fa5" opacity="0.25">
+                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.84s" path="M4,20 L44,20"/>
+                        </circle>
+                    </svg>
+                </div>
+
+                <!-- Phase 04 -->
+                <div class="pipeline-node p4">
+                    <div class="pipeline-num">Phase 04 — Runtime</div>
+                    <h4>Live AR Performance</h4>
+                    <div class="pipeline-techs">
+                        <span class="pipeline-tech">ZED SLAM — 6-DoF tracking</span>
+                        <span class="pipeline-tech">UE5 Composure — depth occlusion</span>
+                        <span class="pipeline-tech">Niagara · WPO — LMA response</span>
+                    </div>
+                    <div class="pipeline-output">→ Composited live AR frame</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── 03 — Camera Alignment ────────────────────────────────────── -->
+    <section id="alignment">
+        <div class="container">
+            <div class="section-label cyan">03 — Camera Alignment</div>
+            <h2>Two Cameras,<br>One Reference Frame</h2>
+            <p>
+                The Sony α and ZED 2i are mounted on the same rig but operate as fully independent
+                devices: different sensors, different internal clocks, different optical centres.
+                The alignment pipeline resolves both the <em>temporal</em> desynchronisation
+                (when did they see the same moment?) and the <em>spatial</em> offset (exactly
+                how far apart are their optical centres, and at what angle?).
+            </p>
+
+            <div class="alignment-grid">
+
+                <!-- Temporal -->
+                <div class="alignment-block reveal">
+                    <h3>Temporal Alignment</h3>
+                    <p style="font-size:13px; max-width:none; color:var(--muted);">
+                        A pre-trained ResNet extracts deep visual feature vectors from every extracted
+                        frame. Dynamic Time Warping then finds the globally optimal frame-to-frame
+                        correspondence between the two cameras by warping the feature sequences rather
+                        than relying on hardware timestamps, which carry cumulative drift.
+                        Savitzky-Golay polynomial smoothing then removes high-frequency jitter from
+                        the raw DTW mapping before synced frames are written to disk.
+                    </p>
+                    <div class="data-panel reveal reveal-delay-1">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Temporal Drift</span>
+                            <span class="data-panel-badge">dataset_04</span>
+                        </div>
+                        <img src="assets/drift_comparison.jpg" alt="Temporal drift comparison: raw DTW vs Savitzky-Golay smoothed" />
+                        <div class="data-panel-caption">
+                            Blue: raw DTW frame-to-frame offset. Orange: Savitzky-Golay smoothed mapping.
+                            The close overlap confirms minimal hardware clock drift in this recording session.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Spatial -->
+                <div class="alignment-block reveal reveal-delay-2">
+                    <h3>Spatial Calibration</h3>
+                    <p style="font-size:13px; max-width:none; color:var(--muted);">
+                        A ChArUco board (8×11 squares, DICT_4X4_50) is recorded by both cameras
+                        simultaneously. Corner detection, per-camera intrinsic calibration, and
+                        full stereo calibration produce the rotation and translation from ZED to Sony
+                        coordinate space. Reprojection error measures how well the calibrated
+                        model reconstructs observed corner positions. The resulting translation
+                        vector is applied directly as a UE5 CineCamera lens offset.
+                    </p>
+
+                    <div class="stat-row">
+                        <div class="stat-box">
+                            <div class="stat-value cyan">0.807</div>
+                            <div class="stat-label">Stereo RMS<br>reprojection error (px)</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value cyan">36</div>
+                            <div class="stat-label">Curated frame<br>pairs used</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value cyan">45+</div>
+                            <div class="stat-label">Min. ChArUco<br>corners per frame</div>
+                        </div>
+                    </div>
+
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title cyan">Reprojection Error Analysis</span>
+                            <span class="data-panel-badge">dataset_04 · rated Good</span>
+                        </div>
+                        <img src="assets/reprojection_error_analysis.png" alt="Per-frame reprojection error bar chart and distribution" />
+                        <div class="data-panel-caption">
+                            Per-frame mean reprojection error across all 36 validated frame pairs.
+                            Mean: 1.71 px · 0 frames above the 2.5 px failure threshold.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Corner coverage maps — full width -->
+            <h3>ChArUco Corner Coverage</h3>
+            <p>Heatmaps showing where corners were detected across the image plane for each camera.
+               Broad spatial coverage — corners distributed across the full sensor area — is essential
+               for a well-conditioned stereo calibration. Both cameras achieved strong coverage in dataset_04.</p>
+
+            <div class="plots-pair-wrapper reveal">
+                <div class="plots-pair-header">
+                    <span class="data-panel-title cyan">Corner Detection Density</span>
+                    <span class="data-panel-badge">dataset_04 · 36 pairs</span>
+                </div>
+                <div class="plots-pair">
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Sony α — RGB Camera</span>
+                        </div>
+                        <img src="assets/corner_coverage_sony_rgb.png" alt="Sony corner coverage heatmap" />
+                    </div>
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">ZED 2i — Depth Camera</span>
+                        </div>
+                        <img src="assets/corner_coverage_zed_rgb.png" alt="ZED corner coverage heatmap" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── 04 — Kinematic Extraction ────────────────────────────────── -->
+    <section id="kinematic">
+        <div class="container">
+            <div class="section-label blue">04 — Kinematic Extraction</div>
+            <h2>Denoising<br>the Skeleton Stream</h2>
+            <p>
+                The ZED SDK's <code>HUMAN_BODY_ACCURATE</code> model tracks 38 joints in the
+                BODY_38 format at 30 Hz, outputting 3D world-space coordinates in millimetres for
+                every joint in every frame where the performer's root (pelvis) is confidently located.
+                Raw joint positions carry sensor noise — micro-jitter that would corrupt any
+                downstream descriptor computation. The 1 Euro Filter resolves this.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-box">
+                    <div class="stat-value blue">38</div>
+                    <div class="stat-label">Skeletal joints<br>tracked (BODY_38)</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value blue">30 Hz</div>
+                    <div class="stat-label">Tracking rate<br>NEURAL depth mode</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value blue">3D</div>
+                    <div class="stat-label">World-space coords<br>per joint (mm)</div>
+                </div>
+            </div>
+
+            <div class="kinematic-grid">
+                <!-- Skeleton SVG -->
+                <div class="skeleton-panel reveal">
+                    <div class="skeleton-panel-header">
+                        <span>BODY_38 Skeleton</span>
+                        <span>30 Hz</span>
+                    </div>
+                    <div class="skeleton-svg-container">
+                        <svg viewBox="0 0 200 330" width="180" height="297" xmlns="http://www.w3.org/2000/svg">
+                            <g class="sk-sway">
+                            <!-- Bones -->
+                            <!-- Spine -->
+                            <line class="sk-bone" x1="100" y1="148" x2="100" y2="125"/>
+                            <line class="sk-bone" x1="100" y1="125" x2="100" y2="105"/>
+                            <line class="sk-bone" x1="100" y1="105" x2="100" y2="85"/>
+                            <line class="sk-bone" x1="100" y1="85"  x2="100" y2="68"/>
+                            <line class="sk-bone" x1="100" y1="68"  x2="100" y2="48"/>
+                            <!-- Head -->
+                            <line class="sk-bone" x1="100" y1="48" x2="88" y2="52"/>
+                            <line class="sk-bone" x1="100" y1="48" x2="112" y2="52"/>
+                            <line class="sk-bone" x1="88"  y1="52" x2="82" y2="58"/>
+                            <line class="sk-bone" x1="112" y1="52" x2="118" y2="58"/>
+                            <!-- Left arm -->
+                            <line class="sk-bone" x1="100" y1="85" x2="86"  y2="85"/>
+                            <line class="sk-bone" x1="86"  y1="85" x2="72"  y2="90"/>
+                            <line class="sk-bone" x1="72"  y1="90" x2="55"  y2="125"/>
+                            <line class="sk-bone" x1="55"  y1="125" x2="38" y2="160"/>
+                            <!-- Left hand -->
+                            <line class="sk-bone" x1="38" y1="160" x2="30" y2="170"/>
+                            <line class="sk-bone" x1="38" y1="160" x2="34" y2="173"/>
+                            <line class="sk-bone" x1="38" y1="160" x2="25" y2="168"/>
+                            <!-- Right arm -->
+                            <line class="sk-bone" x1="100" y1="85" x2="114" y2="85"/>
+                            <line class="sk-bone" x1="114" y1="85" x2="128" y2="90"/>
+                            <line class="sk-bone" x1="128" y1="90" x2="145" y2="125"/>
+                            <line class="sk-bone" x1="145" y1="125" x2="162" y2="160"/>
+                            <!-- Right hand -->
+                            <line class="sk-bone" x1="162" y1="160" x2="170" y2="170"/>
+                            <line class="sk-bone" x1="162" y1="160" x2="166" y2="173"/>
+                            <line class="sk-bone" x1="162" y1="160" x2="175" y2="168"/>
+                            <!-- Left leg -->
+                            <line class="sk-bone" x1="100" y1="148" x2="88"  y2="148"/>
+                            <line class="sk-bone" x1="88"  y1="148" x2="84"  y2="215"/>
+                            <line class="sk-bone" x1="84"  y1="215" x2="80"  y2="280"/>
+                            <line class="sk-bone" x1="80"  y1="280" x2="78"  y2="290"/>
+                            <line class="sk-bone" x1="78"  y1="290" x2="70"  y2="302"/>
+                            <line class="sk-bone" x1="78"  y1="290" x2="77"  y2="304"/>
+                            <!-- Right leg -->
+                            <line class="sk-bone" x1="100" y1="148" x2="112" y2="148"/>
+                            <line class="sk-bone" x1="112" y1="148" x2="116" y2="215"/>
+                            <line class="sk-bone" x1="116" y1="215" x2="120" y2="280"/>
+                            <line class="sk-bone" x1="120" y1="280" x2="122" y2="290"/>
+                            <line class="sk-bone" x1="122" y1="290" x2="130" y2="302"/>
+                            <line class="sk-bone" x1="122" y1="290" x2="121" y2="304"/>
+
+                            <!-- Joints -->
+                            <circle class="sk-joint" cx="100" cy="148" r="3"/>
+                            <circle class="sk-joint" cx="100" cy="125" r="2.5"/>
+                            <circle class="sk-joint-key" cx="100" cy="105" r="3.5"/>
+                            <circle class="sk-joint" cx="100" cy="85" r="2.5"/>
+                            <circle class="sk-joint" cx="100" cy="68" r="2.5"/>
+                            <circle class="sk-joint-head" cx="100" cy="48" r="2.5"/>
+                            <circle class="sk-joint-head" cx="88"  cy="52" r="2"/>
+                            <circle class="sk-joint-head" cx="112" cy="52" r="2"/>
+                            <circle class="sk-joint-head" cx="82"  cy="58" r="2"/>
+                            <circle class="sk-joint-head" cx="118" cy="58" r="2"/>
+                            <circle class="sk-joint" cx="86"  cy="85" r="2.5"/>
+                            <circle class="sk-joint" cx="72"  cy="90" r="3"/>
+                            <circle class="sk-joint" cx="55"  cy="125" r="3"/>
+                            <g class="sk-reach-left">
+                                <circle class="sk-joint-key" cx="38" cy="160" r="3.5"/>
+                            </g>
+                            <circle class="sk-joint" cx="114" cy="85" r="2.5"/>
+                            <circle class="sk-joint" cx="128" cy="90" r="3"/>
+                            <circle class="sk-joint" cx="145" cy="125" r="3"/>
+                            <g class="sk-reach-right">
+                                <circle class="sk-joint-key" cx="162" cy="160" r="3.5"/>
+                            </g>
+                            <circle class="sk-joint" cx="88"  cy="148" r="2.5"/>
+                            <circle class="sk-joint" cx="112" cy="148" r="2.5"/>
+                            <circle class="sk-joint" cx="84"  cy="215" r="3"/>
+                            <circle class="sk-joint" cx="116" cy="215" r="3"/>
+                            <circle class="sk-joint" cx="80"  cy="280" r="2.5"/>
+                            <circle class="sk-joint" cx="120" cy="280" r="2.5"/>
+                            </g>
+                        </svg>
+                    </div>
+                    <div class="skeleton-panel-footer">38 joints · 3D world space</div>
+                </div>
+
+                <!-- Plots stack -->
+                <div class="kinematic-plots">
+                    <div class="data-panel reveal reveal-delay-1">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title blue">1 Euro Filter — Noise Reduction</span>
+                            <span class="data-panel-badge">right_wrist · X axis</span>
+                        </div>
+                        <img src="assets/1Euro_noise_reduction_right_wrist_x.png"
+                             alt="1 Euro Filter: raw vs filtered right wrist X coordinate" />
+                        <div class="data-panel-caption">
+                            Red: raw ZED SDK output. Blue: 1 Euro filtered signal.
+                            The filter attenuates jitter at rest while preserving the sharp transients
+                            of fast ballistic arm movements — the critical property for expressive body tracking.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signal viz + params -->
+            <div class="signal-viz-wrap reveal">
+                <div class="signal-viz-header">
+                    <span>Adaptive Cutoff — How the Filter Works</span>
+                    <span style="color:var(--muted)">Casiez et al., 2012</span>
+                </div>
+                <canvas id="signalCanvas" class="signal-viz-canvas" height="90"></canvas>
+                <div class="signal-viz-footer">
+                    <div class="signal-legend">
+                        <div class="signal-legend-dot" style="background:#e05a4a;"></div>
+                        Raw sensor output — high-frequency noise at rest
+                    </div>
+                    <div class="signal-legend">
+                        <div class="signal-legend-dot" style="background:#4a7fa5;"></div>
+                        1 Euro filtered — jitter removed, transients preserved
+                    </div>
+                </div>
+            </div>
+
+            <div class="param-table reveal">
+                <div class="param-row">
+                    <div class="param-name">min_cutoff = 1.0</div>
+                    <div class="param-desc">Minimum cutoff frequency in Hz. Controls how aggressively
+                        resting jitter is suppressed — lower values smooth more at stillness.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">beta = 0.05</div>
+                    <div class="param-desc">Speed coefficient. Raises the cutoff frequency proportionally
+                        to joint velocity, reducing lag during fast ballistic movements without
+                        passing noise at rest.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">d_cutoff = 1.0</div>
+                    <div class="param-desc">Derivative low-pass cutoff. Stabilises the speed estimate
+                        used by the adaptive cutoff calculation, preventing the filter from overreacting
+                        to single-frame velocity spikes.</div>
+                </div>
+            </div>
+
+            <h3>LMA Expansiveness — The First Metric</h3>
+            <p>
+                Before the descriptor system runs in real time, the Expansiveness metric is computed
+                offline as an analytical validation of the denoised skeleton stream. It measures the
+                maximum reach distance from the midspine (<code>spine_2</code>) to either wrist
+                — the most direct proxy for the performer's use of kinesphere space in Laban's sense.
+                Peaks correspond to large open gestures; valleys mark arms held close to the body.
+            </p>
+            <div class="data-panel reveal">
+                <div class="data-panel-header">
+                    <span class="data-panel-title blue">LMA Kinesphere Expansiveness</span>
+                    <span class="data-panel-badge">max(spine_2 → left_wrist, spine_2 → right_wrist)</span>
+                </div>
+                <img src="assets/lma_expansiveness.png"
+                     alt="LMA Expansiveness metric over time: spine_2 to distal wrist distance in mm" />
+                <div class="data-panel-caption">
+                    Y-axis: Euclidean distance from <code>spine_2</code> to the furthest wrist, in mm.
+                    Computed from raw (unfiltered) positions to preserve full dynamic range.
+                    This time-series is the foundational validation for the Expansiveness descriptor
+                    used in the live system.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── 05 — Embodied Interaction ────────────────────────────────── -->
+    <section id="embodied">
+        <div class="container">
+            <div class="section-label purple">05 — Embodied Interaction</div>
             <h2>Four Qualities.<br>Continuous. Real-Time.</h2>
             <p>
                 The system does not classify gesture types or respond to body position.
-                It computes four continuous scalar descriptors from the live ZED skeletal
-                stream each tick, each corresponding to one of Laban's four Effort factors.
+                It computes four continuous scalar descriptors from the live denoised ZED
+                skeletal stream on every tick, each corresponding to one of Laban's four Effort factors.
                 The eight canonical LMA Action Drives emerge as regions in the resulting
                 four-dimensional quality space rather than being explicitly detected.
+            </p>
+            <p>
+                Each descriptor output passes through a calibrated sigmoid output curve that
+                establishes a perceptual dead zone — below which incidental movement produces
+                no AR response — and a saturation threshold above which the response plateaus.
+                This ensures the virtual environment responds only to intentional expressive
+                movement, not postural micro-adjustments or sensor residuals.
             </p>
 
             <div class="descriptors reveal">
@@ -819,16 +1631,16 @@
                 <div class="desc-card expand">
                     <div class="desc-lma">LMA Space — Expanded ↔ Contracted</div>
                     <h4>Expansiveness</h4>
-                    <p>Maximum distance from either wrist to <code>spine_2</code>. The
-                        maximum of two wrists captures kinesphere reach correctly — the
-                        largest spatial gesture defines the body's spatial attitude.
-                        Force direction follows the wrist-to-spine vector, not omnidirectionally.</p>
+                    <p>Maximum distance from either wrist to <code>spine_2</code>. The maximum
+                        of two wrists captures kinesphere reach correctly — the largest spatial
+                        gesture defines the body's spatial attitude. Force direction follows
+                        the wrist-to-spine vector.</p>
                     <div class="desc-output">→ <span>MPC</span> · WPO deformation frequency · RadialForce radius</div>
                 </div>
                 <div class="desc-card weight">
                     <div class="desc-lma">LMA Weight — Strong ↔ Light</div>
                     <h4>Weight</h4>
-                    <p>Acceleration magnitude across key joints — rate of velocity change.
+                    <p>Acceleration magnitude across key joints — the rate of velocity change.
                         Independent of Effort: a body can move fast with low acceleration
                         (quick drift) or fast with high acceleration (punch). High Weight
                         means force is being exerted or absorbed.</p>
@@ -841,23 +1653,22 @@
                         High sigma — velocity is erratic, unpredictable — reads as Free.
                         Low sigma — velocity changes predictably — reads as Bound. Serves
                         simultaneously as the internal smoothing control variable.</p>
-                    <div class="desc-output">→ <span>Niagara</span> · attractor strength &nbsp;·&nbsp; <span>MPC</span>
-                        · surface noise scale</div>
+                    <div class="desc-output">→ <span>Niagara</span> · attractor strength &nbsp;·&nbsp; <span>MPC</span> · noise scale</div>
                 </div>
             </div>
 
             <h3>The Eight Action Drives</h3>
             <p>
                 Combinations of Effort, Expansiveness, and Weight produce the eight LMA
-                Action Drives as emergent output regions. The system positions movement
-                continuously within this space — the most expressive work happens in
-                transitions between archetypes, not inside any single one.
+                Action Drives as emergent output regions in descriptor space. The most
+                expressive work happens in transitions between archetypes, not inside any
+                single one.
             </p>
             <div class="drives-grid reveal">
                 <div class="drive-header">Drive</div>
                 <div class="drive-header">Quality</div>
                 <div class="drive-header">Descriptor Profile</div>
-                <div class="drive-header">CG Grid Response</div>
+                <div class="drive-header">CG Response</div>
 
                 <div class="drive-cell"><strong>Slash</strong></div>
                 <div class="drive-cell"><span class="qualities">Violent · Chaotic</span></div>
@@ -902,139 +1713,100 @@
         </div>
     </section>
 
-    <!-- ── Demo ─────────────────────────────────────────────────────── -->
+    <!-- ── 06 — Demonstration ───────────────────────────────────────── -->
     <section id="demo">
         <div class="container">
-            <div class="section-label">03 — Demonstration</div>
+            <div class="section-label">06 — Demonstration</div>
             <h2>A Grid That Listens<br>to How You Move</h2>
             <div class="demo-layout">
                 <div class="demo-visual">
+                    <div class="demo-visual-label">Live AR Grid — Conceptual</div>
                     <div class="cube-grid" id="cubeGrid"></div>
-                    <div class="performer-dot"></div>
+                    <div class="performer-dot" id="performerDot"></div>
+                    <div class="demo-state-bar">
+                        <span class="demo-state-label" id="demoStateLabel">Float</span>
+                        <div class="demo-state-dots" id="demoStateDots">
+                            <div class="demo-state-dot active"></div>
+                            <div class="demo-state-dot"></div>
+                            <div class="demo-state-dot"></div>
+                            <div class="demo-state-dot"></div>
+                        </div>
+                    </div>
                 </div>
                 <div class="demo-description reveal">
                     <p>
-                        The demonstration places the performer at the centre of a
-                        three-dimensional grid of physics-simulated cubic objects in an LED
-                        volume. The grid is permanently anchored to the performer's pelvis
-                        joint, keeping the body at the centre of the formation regardless
-                        of movement through the stage.
+                        The demonstration places the performer at the centre of a three-dimensional
+                        grid of physics-simulated cubic objects in an LED volume. The grid is
+                        permanently anchored to the performer's pelvis joint — the body stays at
+                        the centre of the formation regardless of movement through the stage.
                     </p>
                     <p>
                         Cubes in front of the performer are occluded by the depth comparison
-                        pipeline — the body correctly appears in front of them. Cubes behind
-                        are hidden behind the body. A camera rotating around the performer
-                        continuously renegotiates these depth relationships, demonstrating
-                        that occlusion is genuinely three-dimensional.
+                        pipeline — the body correctly appears in front of them. Cubes behind are
+                        hidden behind the body. A camera rotating around the performer continuously
+                        renegotiates these depth relationships in three dimensions.
                     </p>
                     <p>
-                        The grid responds to movement quality, not position. An arm thrust
-                        forward with high force pushes the grid forward along the arm's
-                        direction vector. A slow expansion opens the grid outward over a
-                        wide radius. A sudden explosive movement scatters the cubes and
-                        floods the space with particles.
+                        The grid responds to movement quality, not position. An arm thrust forward
+                        with high force pushes the grid forward along the arm's direction vector.
+                        A slow open expansion spreads the grid outward. A sudden explosive movement
+                        scatters the cubes and floods the space with particles.
                     </p>
                     <div class="demo-note">
                         The system reads the body's expressive state, not its location.
                         A stationary performer exerting high muscular tension produces a
-                        different grid response than the same position held with no tension.
+                        different grid response than the same position held without tension.
+                        The LMA drive states cycle in the visualisation above.
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- ── Smoothing ─────────────────────────────────────────────────── -->
-    <section id="smoothing">
-        <div class="container">
-            <div class="section-label">04 — Noise Suppression</div>
-            <h2>1 Euro Filter<br>on the Skeleton Stream</h2>
-            <p>
-                Geometric sensor noise from ZED BODY_38 joint position estimation is
-                suppressed using the 1 Euro Filter applied independently to each of
-                the 38 joints before any descriptor computation. The filter attenuates
-                high-frequency jitter at rest while preserving sharp transients during
-                fast ballistic limb movements — the correct behaviour for expressive
-                body tracking where both stillness and sudden bursts must be represented
-                faithfully.
-            </p>
-            <p>
-                The filter parameters are calibrated to ZED 2i characteristics at 30 Hz
-                with NEURAL depth mode and validated in Phase 3 of the offline pipeline:
-            </p>
-            <div class="repos" style="margin-top:32px;">
-                <div class="repo-row" style="cursor:default; pointer-events:none;">
-                    <div class="repo-name">min_cutoff</div>
-                    <div class="repo-desc">1.0 Hz — controls jitter suppression at rest. Lower values smooth more
-                        aggressively during stillness.</div>
-                </div>
-                <div class="repo-row" style="cursor:default; pointer-events:none;">
-                    <div class="repo-name">beta</div>
-                    <div class="repo-desc">0.05 — controls lag reduction during fast movement. Higher values reduce lag
-                        at the cost of some noise passthrough.</div>
-                </div>
-                <div class="repo-row" style="cursor:default; pointer-events:none;">
-                    <div class="repo-name">d_cutoff</div>
-                    <div class="repo-desc">1.0 Hz — derivative low-pass cutoff, stabilising the speed estimate used by
-                        the adaptive cutoff calculation.</div>
-                </div>
-            </div>
-            <p style="margin-top:28px;">
-                Once per-joint noise is suppressed, the four LMA descriptor scalars are
-                computed from the filtered joint positions. Each descriptor output then
-                passes through a calibrated sigmoid output curve establishing a perceptual
-                dead zone — below which incidental movement produces no AR response — and
-                a saturation threshold above which the response plateaus at maximum.
-                This ensures the AR environment responds only to intentional expressive
-                movement, not to postural micro-adjustments or sensor residuals.
-            </p>
-        </div>
-    </section>
-
-    <!-- ── Repos ─────────────────────────────────────────────────────── -->
+    <!-- ── 07 — Repositories ────────────────────────────────────────── -->
     <section id="repos">
         <div class="container">
-            <div class="section-label">05 — Repositories</div>
+            <div class="section-label">07 — Repositories</div>
             <h2>System Architecture<br>Across Four Repos</h2>
             <p>
-                The project is structured as four independent repositories, each with a
-                clearly scoped responsibility. The offline analysis and calibration repos
-                feed configuration outputs that the runtime repo consumes at startup.
+                The project is structured as four independent repositories, each with a clearly
+                scoped responsibility. The offline pipeline repos produce configuration outputs
+                and validated kinematic data that the runtime repo consumes at startup.
             </p>
             <div class="repos reveal">
                 <a class="repo-row" href="https://github.com/Muhannad7794/VP_AR_full_System" target="_blank">
                     <div class="repo-name">VP_AR_full_System</div>
-                    <div class="repo-desc">Offline pipeline: temporal alignment, spatial calibration, kinematic
-                        extraction and 1 Euro filtering. This page.</div>
+                    <div class="repo-desc">Offline pipeline: temporal alignment, spatial calibration,
+                        kinematic extraction and 1 Euro filtering. This page.</div>
                     <div class="repo-arrow">→</div>
                 </a>
                 <a class="repo-row" href="https://github.com/Muhannad7794/VP_AR_full_System_runtime" target="_blank">
                     <div class="repo-name">_runtime</div>
-                    <div class="repo-desc">UE5 C++ runtime: camera tracking, compositing, occlusion, EI descriptor
-                        components, Niagara, mode switching.</div>
+                    <div class="repo-desc">UE5 C++ runtime: camera tracking, Composure, depth occlusion,
+                        EI descriptor components, Niagara, mode switching.</div>
                     <div class="repo-arrow">→</div>
                 </a>
                 <a class="repo-row" href="https://github.com/Muhannad7794/vp_baseFree_tracking" target="_blank">
                     <div class="repo-name">vp_baseFree_tracking</div>
-                    <div class="repo-desc">Adaptive smoothing analysis pipeline for camera tracking. Sigma-based
-                        interpolation models: linear, sigmoid, piecewise.</div>
+                    <div class="repo-desc">Adaptive smoothing analysis pipeline for camera tracking.
+                        Sigma-based interpolation models: linear, sigmoid, piecewise.</div>
                     <div class="repo-arrow">→</div>
                 </a>
                 <a class="repo-row" href="#" target="_blank">
                     <div class="repo-name">MoCap_VP_System</div>
-                    <div class="repo-desc">MoCap descriptor smoothing system. LMA category-based calibration. Denoise
-                        pipeline for body tracking descriptor scalars.</div>
+                    <div class="repo-desc">MoCap descriptor smoothing system. LMA category-based calibration.
+                        Denoise pipeline for body tracking descriptor scalars.</div>
                     <div class="repo-arrow">→</div>
                 </a>
             </div>
         </div>
     </section>
 
-    <!-- ── References ────────────────────────────────────────────────── -->
+    <!-- ── 08 — References ──────────────────────────────────────────── -->
     <section id="references">
         <div class="container">
-            <div class="section-label">06 — References</div>
-            <h2>Theoretical Grounding</h2>
+            <div class="section-label">08 — References</div>
+            <h2>Theoretical &amp; Technical Grounding</h2>
             <div class="refs">
                 <div class="ref">
                     <div class="ref-num">[1]</div>
@@ -1042,8 +1814,7 @@
                         Caramiaux, B., Bevilacqua, F., &amp; Schiphorst, T. (2015).
                         Towards a Movement Quality Framework for Interactive Systems.
                         <em>MOCO '15</em>. ACM.
-                        <a href="https://doi.org/10.1145/2790994.2791001"
-                            target="_blank">doi:10.1145/2790994.2791001</a>
+                        <a href="https://doi.org/10.1145/2790994.2791001" target="_blank">doi:10.1145/2790994.2791001</a>
                     </div>
                 </div>
                 <div class="ref">
@@ -1058,8 +1829,7 @@
                     <div class="ref-text">
                         Loke, L., &amp; Robertson, T. (2013). Moving and making strange.
                         <em>ACM TOCHI, 20</em>(1).
-                        <a href="https://doi.org/10.1145/2442106.2442113"
-                            target="_blank">doi:10.1145/2442106.2442113</a>
+                        <a href="https://doi.org/10.1145/2442106.2442113" target="_blank">doi:10.1145/2442106.2442113</a>
                     </div>
                 </div>
                 <div class="ref">
@@ -1072,11 +1842,36 @@
                 <div class="ref">
                     <div class="ref-num">[5]</div>
                     <div class="ref-text">
-                        Sinyor, R., &amp; Camurri, A. (1999). Recognizing Laban Effort
-                        qualities in live dance performance. <em>CVPR '99</em>.
-                        IEEE.
-                        <a href="https://doi.org/10.1109/CVPR.1999.786954"
-                            target="_blank">doi:10.1109/CVPR.1999.786954</a>
+                        Sinyor, R., &amp; Camurri, A. (1999). Recognizing Laban Effort qualities
+                        in live dance performance. <em>CVPR '99</em>. IEEE.
+                        <a href="https://doi.org/10.1109/CVPR.1999.786954" target="_blank">doi:10.1109/CVPR.1999.786954</a>
+                    </div>
+                </div>
+                <div class="ref">
+                    <div class="ref-num">[6]</div>
+                    <div class="ref-text">
+                        Casiez, G., Roussel, N., &amp; Vogel, D. (2012). 1 € Filter: A Simple
+                        Speed-based Low-pass Filter for Noisy Input in Interactive Systems.
+                        <em>CHI '12</em>. ACM.
+                        <a href="https://doi.org/10.1145/2207676.2208639" target="_blank">doi:10.1145/2207676.2208639</a>
+                    </div>
+                </div>
+                <div class="ref">
+                    <div class="ref-num">[7]</div>
+                    <div class="ref-text">
+                        Müller, M. (2007). Dynamic Time Warping.
+                        <em>Information Retrieval for Music and Motion</em> (pp. 69–84). Springer.
+                        <a href="https://doi.org/10.1007/978-3-540-74048-3_4" target="_blank">doi:10.1007/978-3-540-74048-3_4</a>
+                    </div>
+                </div>
+                <div class="ref">
+                    <div class="ref-num">[8]</div>
+                    <div class="ref-text">
+                        Garrido-Jurado, S., Muñoz-Salinas, R., Madrid-Cuevas, F. J., &amp;
+                        Marín-Jiménez, M. J. (2014). Automatic generation and detection of highly
+                        reliable fiducial markers under occlusion.
+                        <em>Pattern Recognition, 47</em>(6), 2280–2292.
+                        <a href="https://doi.org/10.1016/j.patcog.2014.01.005" target="_blank">doi:10.1016/j.patcog.2014.01.005</a>
                     </div>
                 </div>
             </div>
@@ -1090,39 +1885,251 @@
                 Muhannad Al Ulaby<br>
                 Medialogy MSc · Aalborg University Copenhagen · 2026<br>
                 <a href="https://github.com/Muhannad7794"
-                    style="color:var(--gold-dim);text-decoration:none;">github.com/Muhannad7794</a>
+                   style="color:var(--gold-dim);text-decoration:none;">github.com/Muhannad7794</a>
             </div>
-            <div class="footer-right">Kinematic AR<br>VP / AR / EI</div>
+            <div class="footer-right">
+                Base-Free Tracking<br>
+                Depth Occlusion<br>
+                Embodied AR
+            </div>
         </div>
     </footer>
 
     <script>
-        // ── Scroll reveal ──────────────────────────────────────────────
-        const observer = new IntersectionObserver(
-            entries => entries.forEach(e => {
-                if (e.isIntersecting) { e.target.classList.add('visible'); }
-            }),
-            { threshold: 0.12 }
-        );
-        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    // ── Hero canvas animation ──────────────────────────────────────────
+    (function () {
+        const canvas = document.getElementById('heroCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let W, H, particles, tick = 0, scanX = -120;
 
-        // ── Animated cube grid ─────────────────────────────────────────
-        const grid = document.getElementById('cubeGrid');
-        if (grid) {
-            const cols = 6, rows = 6, size = 28;
-            for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                    const dot = document.createElement('div');
-                    dot.className = 'cube-dot';
-                    dot.style.left = (c * size + 16) + 'px';
-                    dot.style.top = (r * size + 16) + 'px';
-                    dot.style.setProperty('--i', String(r * cols + c));
-                    dot.style.animationDelay = ((r * cols + c) * 0.08) + 's';
-                    grid.appendChild(dot);
-                }
+        function resize() {
+            W = canvas.width  = canvas.offsetWidth;
+            H = canvas.height = canvas.offsetHeight;
+            particles = Array.from({ length: 55 }, () => ({
+                x: Math.random() * W,
+                y: Math.random() * H,
+                vx: (Math.random() - 0.5) * 0.28,
+                vy: (Math.random() - 0.5) * 0.18,
+                r: Math.random() * 1.8 + 0.6,
+                phase: Math.random() * Math.PI * 2
+            }));
+        }
+
+        function frame() {
+            ctx.clearRect(0, 0, W, H);
+            tick++;
+            scanX += 0.7;
+            if (scanX > W + 120) scanX = -120;
+
+            // Draw faint grid
+            ctx.strokeStyle = 'rgba(34,38,45,0.4)';
+            ctx.lineWidth = 0.5;
+            for (let x = 0; x < W; x += 60) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+            }
+            for (let y = 0; y < H; y += 60) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+            }
+
+            // Draw scanning waveform
+            const ww = 180;
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(201,168,76,0.18)';
+            ctx.lineWidth = 1.5;
+            let first = true;
+            for (let x = scanX - ww; x <= scanX + ww; x += 2) {
+                if (x < 0 || x > W) continue;
+                const t = (x - (scanX - ww)) / (2 * ww);
+                const envelope = Math.sin(t * Math.PI);
+                const y = H * 0.5 + Math.sin(x * 0.035 + tick * 0.04) * 22 * envelope
+                                   + Math.sin(x * 0.07  + tick * 0.07) * 8  * envelope;
+                if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // Draw particles (tracked joints)
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if (p.x < -10) p.x = W + 10;
+                if (p.x > W + 10) p.x = -10;
+                if (p.y < -10) p.y = H + 10;
+                if (p.y > H + 10) p.y = -10;
+                const a = 0.12 + 0.1 * Math.sin(tick * 0.025 + p.phase);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(201,168,76,${a})`;
+                ctx.fill();
+            });
+
+            requestAnimationFrame(frame);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+        frame();
+    })();
+
+    // ── Signal canvas animation ────────────────────────────────────────
+    (function () {
+        const canvas = document.getElementById('signalCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let W, H, tick = 0;
+
+        function resize() {
+            W = canvas.width  = canvas.offsetWidth;
+            H = canvas.height = 90;
+        }
+
+        function frame() {
+            ctx.clearRect(0, 0, W, H);
+            tick++;
+
+            const mid = H / 2;
+
+            // Noisy signal (raw)
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(224,90,74,0.55)';
+            ctx.lineWidth = 1.2;
+            for (let x = 0; x <= W; x += 2) {
+                const t = x / W;
+                const base = Math.sin(t * Math.PI * 4 + tick * 0.03) * 16;
+                const noise = (Math.random() - 0.5) * 14 * Math.sin(t * Math.PI);
+                const y = mid + base + noise;
+                x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // Filtered signal (clean)
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(74,127,165,0.9)';
+            ctx.lineWidth = 2;
+            for (let x = 0; x <= W; x += 2) {
+                const t = x / W;
+                const y = mid + Math.sin(t * Math.PI * 4 + tick * 0.03) * 16 * Math.sin(t * Math.PI * 0.8 + 0.3);
+                x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            requestAnimationFrame(frame);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+        frame();
+    })();
+
+    // ── Cube grid — LMA state cycling ─────────────────────────────────
+    (function () {
+        const grid     = document.getElementById('cubeGrid');
+        const stateLabel = document.getElementById('demoStateLabel');
+        const stateDots  = document.getElementById('demoStateDots');
+        if (!grid) return;
+
+        const STATES = [
+            {
+                name: 'Float',
+                color: 'rgba(74,138,90,0.7)',
+                spread: 1.0,
+                speed: 2.8,
+                size: 7
+            },
+            {
+                name: 'Slash',
+                color: 'rgba(201,100,60,0.9)',
+                spread: 2.4,
+                speed: 0.4,
+                size: 10
+            },
+            {
+                name: 'Glide',
+                color: 'rgba(74,127,165,0.8)',
+                spread: 0.6,
+                speed: 3.5,
+                size: 8
+            },
+            {
+                name: 'Wring',
+                color: 'rgba(122,74,154,0.85)',
+                spread: 1.8,
+                speed: 1.2,
+                size: 9
+            }
+        ];
+
+        const COLS = 7, ROWS = 7, BASE_SIZE = 28;
+        const dots = [];
+
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const dot = document.createElement('div');
+                dot.className = 'cube-dot';
+                const cx = c * BASE_SIZE + 14;
+                const cy = r * BASE_SIZE + 14;
+                dot.dataset.cx = cx;
+                dot.dataset.cy = cy;
+                dot.style.left  = cx + 'px';
+                dot.style.top   = cy + 'px';
+                dot.style.width = dot.style.height = '7px';
+                dot.style.background = 'rgba(201,168,76,0.5)';
+                dot.style.borderRadius = '1px';
+                grid.appendChild(dot);
+                dots.push(dot);
             }
         }
-    </script>
-</body>
 
+        // Center of grid
+        const cx = ((COLS - 1) * BASE_SIZE + 14) / 2;
+        const cy = ((ROWS - 1) * BASE_SIZE + 14) / 2;
+
+        let stateIdx = 0;
+
+        function applyState(state) {
+            stateLabel.textContent = state.name;
+            // Update dots
+            stateDots.querySelectorAll('.demo-state-dot').forEach((d, i) => {
+                d.classList.toggle('active', i === stateIdx % STATES.length);
+            });
+            dots.forEach(dot => {
+                const ox = parseFloat(dot.dataset.cx);
+                const oy = parseFloat(dot.dataset.cy);
+                const dx = ox - cx;
+                const dy = oy - cy;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                const s = state.spread;
+                const tx = ox + dx * (s - 1) * 0.45 + (Math.random() - 0.5) * (state.spread * 6);
+                const ty = oy + dy * (s - 1) * 0.45 + (Math.random() - 0.5) * (state.spread * 6);
+                dot.style.left   = tx + 'px';
+                dot.style.top    = ty + 'px';
+                dot.style.width  = dot.style.height = state.size + 'px';
+                dot.style.background = state.color;
+                dot.style.transitionDuration = state.speed + 's';
+                dot.style.opacity = 0.5 + Math.random() * 0.5;
+            });
+        }
+
+        // Cycle through states
+        function nextState() {
+            applyState(STATES[stateIdx % STATES.length]);
+            stateIdx++;
+        }
+
+        applyState(STATES[0]);
+        setInterval(nextState, 3200);
+    })();
+
+    // ── Scroll reveal ──────────────────────────────────────────────────
+    (function () {
+        const obs = new IntersectionObserver(
+            entries => entries.forEach(e => {
+                if (e.isIntersecting) e.target.classList.add('visible');
+            }),
+            { threshold: 0.1 }
+        );
+        document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+    })();
+    </script>
+
+</body>
 </html>
