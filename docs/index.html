@@ -628,14 +628,8 @@
             75%      { transform: rotate(-0.8deg); }
         }
 
-        /* Wrist reach animation */
-        .sk-reach-left {
-            animation: skReachL 5s ease-in-out infinite;
-        }
-
-        .sk-reach-right {
-            animation: skReachR 5s ease-in-out infinite 0.5s;
-        }
+        .sk-reach-left  { animation: skReachL 5s ease-in-out infinite; }
+        .sk-reach-right { animation: skReachR 5s ease-in-out infinite 0.5s; }
 
         @keyframes skReachL {
             0%,100% { transform: translate(0,0); }
@@ -889,7 +883,6 @@
             position: absolute;
             border-radius: 1px;
             will-change: transform, background, width, height;
-            /* motion handled by requestAnimationFrame — no CSS transition */
         }
 
         .performer-dot {
@@ -932,14 +925,10 @@
             transition: opacity 0.2s ease;
         }
 
-        .demo-state-dots {
-            display: flex;
-            gap: 4px;
-        }
+        .demo-state-dots { display: flex; gap: 4px; }
 
         .demo-state-dot {
-            width: 5px;
-            height: 5px;
+            width: 5px; height: 5px;
             border-radius: 50%;
             background: var(--border);
         }
@@ -961,6 +950,186 @@
             color: var(--muted);
             font-style: italic;
             margin-top: 20px;
+        }
+
+        /* ─── VIDEO GALLERY ──────────────────────────────────────────────── */
+
+        .media-category {
+            margin-top: 56px;
+        }
+
+        .media-category:first-of-type {
+            margin-top: 44px;
+        }
+
+        .media-category-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+
+        .media-category-tag {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .media-category-tag.gold   { color: var(--gold); }
+        .media-category-tag.cyan   { color: var(--cyan); }
+        .media-category-tag.purple { color: var(--accent2); }
+        .media-category-tag.blue   { color: var(--accent); }
+
+        .media-category-line {
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .media-category-title {
+            font-family: var(--serif);
+            font-size: 24px;
+            font-weight: 400;
+            color: #f0ebe2;
+            margin-bottom: 8px;
+            margin-top: 10px;
+            line-height: 1.25;
+        }
+
+        .media-category-desc {
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.65;
+            max-width: 680px;
+            margin-bottom: 20px;
+        }
+
+        /* Grid layouts */
+        .media-grid {
+            display: grid;
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+        }
+
+        .media-grid.cols-1 { grid-template-columns: 1fr; }
+        .media-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+
+        /* Individual card */
+        .media-card {
+            background: var(--surface);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: background 0.2s;
+        }
+
+        .media-card:hover { background: var(--surface2); }
+
+        /* 16:9 video wrapper */
+        .video-wrap {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%;
+            background: #090a0c;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .video-wrap iframe,
+        .video-wrap video {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* Placeholder shown when no video is embedded yet */
+        .video-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+        }
+
+        .video-placeholder-ring {
+            width: 52px;
+            height: 52px;
+            border: 1px solid var(--border2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .video-placeholder-ring::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            opacity: 0.4;
+        }
+
+        .video-placeholder-icon {
+            font-size: 16px;
+            color: var(--border2);
+            margin-left: 2px; /* optical centering for play triangle */
+        }
+
+        .video-placeholder-text {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--border2);
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        /* Card metadata footer */
+        .media-card-body {
+            padding: 14px 18px 16px;
+            border-top: 1px solid var(--border);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .media-card-badge {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .media-card-badge.gold   { color: var(--gold); }
+        .media-card-badge.cyan   { color: var(--cyan); }
+        .media-card-badge.purple { color: var(--accent2); }
+        .media-card-badge.blue   { color: var(--accent); }
+
+        .media-card-title {
+            font-family: var(--serif);
+            font-size: 17px;
+            font-weight: 400;
+            color: #f0ebe2;
+            line-height: 1.3;
+        }
+
+        .media-card-desc {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.55;
+            margin: 0;
+            max-width: none;
         }
 
         /* ─── Repos section ─────────────────────────────────────────────── */
@@ -1060,23 +1229,21 @@
 
         /* ─── Responsive ────────────────────────────────────────────────── */
         @media (max-width: 800px) {
-            .pillars      { grid-template-columns: repeat(2, 1fr); }
-            .pipeline-flow {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto;
-            }
+            .pillars          { grid-template-columns: repeat(2, 1fr); }
+            .pipeline-flow    { grid-template-columns: 1fr; grid-template-rows: auto; }
             .pipeline-connector { display: none; }
-            .alignment-grid { grid-template-columns: 1fr; }
-            .kinematic-grid { grid-template-columns: 1fr; }
-            .plots-pair { grid-template-columns: 1fr; }
-            .descriptors  { grid-template-columns: 1fr; }
-            .drives-grid  { grid-template-columns: 1fr; }
-            .demo-layout  { grid-template-columns: 1fr; }
-            .stat-row     { grid-template-columns: 1fr; }
-            .repo-row     { grid-template-columns: 1fr; }
-            .repo-arrow   { display: none; }
-            .nav-links    { display: none; }
+            .alignment-grid   { grid-template-columns: 1fr; }
+            .kinematic-grid   { grid-template-columns: 1fr; }
+            .plots-pair       { grid-template-columns: 1fr; }
+            .descriptors      { grid-template-columns: 1fr; }
+            .drives-grid      { grid-template-columns: 1fr; }
+            .demo-layout      { grid-template-columns: 1fr; }
+            .stat-row         { grid-template-columns: 1fr; }
+            .repo-row         { grid-template-columns: 1fr; }
+            .repo-arrow       { display: none; }
+            .nav-links        { display: none; }
             .pipeline-flow .pipeline-node { margin-bottom: 1px; }
+            .media-grid.cols-2 { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -1093,6 +1260,7 @@
                 <li><a href="#alignment">Alignment</a></li>
                 <li><a href="#kinematic">Kinematic</a></li>
                 <li><a href="#embodied">Embodied</a></li>
+                <li><a href="#media">Media</a></li>
                 <li><a href="#repos">Repos</a></li>
             </ul>
         </div>
@@ -1189,8 +1357,6 @@
                 decoupled — calibration runs once per recording setup; the runtime runs at every performance.
             </p>
             <div class="pipeline-flow reveal">
-
-                <!-- Phase 01 -->
                 <div class="pipeline-node p1">
                     <div class="pipeline-num">Phase 01 — Offline</div>
                     <h4>Temporal Alignment</h4>
@@ -1201,24 +1367,14 @@
                     </div>
                     <div class="pipeline-output">→ Synced frame pairs</div>
                 </div>
-
-                <!-- Connector 1→2 -->
                 <div class="pipeline-connector">
                     <svg width="48" height="40" viewBox="0 0 48 40">
                         <line x1="4" y1="20" x2="44" y2="20" stroke="#22262d" stroke-width="1"/>
-                        <circle r="3" fill="#c9a84c" opacity="0.8">
-                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0s" path="M4,20 L44,20"/>
-                        </circle>
-                        <circle r="3" fill="#c9a84c" opacity="0.5">
-                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.37s" path="M4,20 L44,20"/>
-                        </circle>
-                        <circle r="3" fill="#c9a84c" opacity="0.25">
-                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.74s" path="M4,20 L44,20"/>
-                        </circle>
+                        <circle r="3" fill="#c9a84c" opacity="0.8"><animateMotion dur="1.1s" repeatCount="indefinite" begin="0s" path="M4,20 L44,20"/></circle>
+                        <circle r="3" fill="#c9a84c" opacity="0.5"><animateMotion dur="1.1s" repeatCount="indefinite" begin="0.37s" path="M4,20 L44,20"/></circle>
+                        <circle r="3" fill="#c9a84c" opacity="0.25"><animateMotion dur="1.1s" repeatCount="indefinite" begin="0.74s" path="M4,20 L44,20"/></circle>
                     </svg>
                 </div>
-
-                <!-- Phase 02 -->
                 <div class="pipeline-node p2">
                     <div class="pipeline-num">Phase 02 — Offline</div>
                     <h4>Spatial Calibration</h4>
@@ -1229,24 +1385,14 @@
                     </div>
                     <div class="pipeline-output">→ Camera matrices · UE5 offset</div>
                 </div>
-
-                <!-- Connector 2→3 -->
                 <div class="pipeline-connector">
                     <svg width="48" height="40" viewBox="0 0 48 40">
                         <line x1="4" y1="20" x2="44" y2="20" stroke="#22262d" stroke-width="1"/>
-                        <circle r="3" fill="#3d9ea0" opacity="0.8">
-                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.2s" path="M4,20 L44,20"/>
-                        </circle>
-                        <circle r="3" fill="#3d9ea0" opacity="0.5">
-                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.57s" path="M4,20 L44,20"/>
-                        </circle>
-                        <circle r="3" fill="#3d9ea0" opacity="0.25">
-                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.94s" path="M4,20 L44,20"/>
-                        </circle>
+                        <circle r="3" fill="#3d9ea0" opacity="0.8"><animateMotion dur="1.1s" repeatCount="indefinite" begin="0.2s" path="M4,20 L44,20"/></circle>
+                        <circle r="3" fill="#3d9ea0" opacity="0.5"><animateMotion dur="1.1s" repeatCount="indefinite" begin="0.57s" path="M4,20 L44,20"/></circle>
+                        <circle r="3" fill="#3d9ea0" opacity="0.25"><animateMotion dur="1.1s" repeatCount="indefinite" begin="0.94s" path="M4,20 L44,20"/></circle>
                     </svg>
                 </div>
-
-                <!-- Phase 03 -->
                 <div class="pipeline-node p3">
                     <div class="pipeline-num">Phase 03 — Offline</div>
                     <h4>Kinematic Extraction</h4>
@@ -1257,24 +1403,14 @@
                     </div>
                     <div class="pipeline-output">→ Denoised 38-joint stream</div>
                 </div>
-
-                <!-- Connector 3→4 -->
                 <div class="pipeline-connector">
                     <svg width="48" height="40" viewBox="0 0 48 40">
                         <line x1="4" y1="20" x2="44" y2="20" stroke="#22262d" stroke-width="1"/>
-                        <circle r="3" fill="#4a7fa5" opacity="0.8">
-                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.1s" path="M4,20 L44,20"/>
-                        </circle>
-                        <circle r="3" fill="#4a7fa5" opacity="0.5">
-                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.47s" path="M4,20 L44,20"/>
-                        </circle>
-                        <circle r="3" fill="#4a7fa5" opacity="0.25">
-                            <animateMotion dur="1.1s" repeatCount="indefinite" begin="0.84s" path="M4,20 L44,20"/>
-                        </circle>
+                        <circle r="3" fill="#4a7fa5" opacity="0.8"><animateMotion dur="1.1s" repeatCount="indefinite" begin="0.1s" path="M4,20 L44,20"/></circle>
+                        <circle r="3" fill="#4a7fa5" opacity="0.5"><animateMotion dur="1.1s" repeatCount="indefinite" begin="0.47s" path="M4,20 L44,20"/></circle>
+                        <circle r="3" fill="#4a7fa5" opacity="0.25"><animateMotion dur="1.1s" repeatCount="indefinite" begin="0.84s" path="M4,20 L44,20"/></circle>
                     </svg>
                 </div>
-
-                <!-- Phase 04 -->
                 <div class="pipeline-node p4">
                     <div class="pipeline-num">Phase 04 — Runtime</div>
                     <h4>Live AR Performance</h4>
@@ -1301,10 +1437,7 @@
                 (when did they see the same moment?) and the <em>spatial</em> offset (exactly
                 how far apart are their optical centres, and at what angle?).
             </p>
-
             <div class="alignment-grid">
-
-                <!-- Temporal -->
                 <div class="alignment-block reveal">
                     <h3>Temporal Alignment</h3>
                     <p style="font-size:13px; max-width:none; color:var(--muted);">
@@ -1327,8 +1460,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Spatial -->
                 <div class="alignment-block reveal reveal-delay-2">
                     <h3>Spatial Calibration</h3>
                     <p style="font-size:13px; max-width:none; color:var(--muted);">
@@ -1339,7 +1470,6 @@
                         model reconstructs observed corner positions. The resulting translation
                         vector is applied directly as a UE5 CineCamera lens offset.
                     </p>
-
                     <div class="stat-row">
                         <div class="stat-box">
                             <div class="stat-value cyan">0.807</div>
@@ -1354,7 +1484,6 @@
                             <div class="stat-label">Min. ChArUco<br>corners per frame</div>
                         </div>
                     </div>
-
                     <div class="data-panel">
                         <div class="data-panel-header">
                             <span class="data-panel-title cyan">Reprojection Error Analysis</span>
@@ -1368,13 +1497,10 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Corner coverage maps — full width -->
             <h3>ChArUco Corner Coverage</h3>
             <p>Heatmaps showing where corners were detected across the image plane for each camera.
                Broad spatial coverage — corners distributed across the full sensor area — is essential
                for a well-conditioned stereo calibration. Both cameras achieved strong coverage in dataset_04.</p>
-
             <div class="plots-pair-wrapper reveal">
                 <div class="plots-pair-header">
                     <span class="data-panel-title cyan">Corner Detection Density</span>
@@ -1410,7 +1536,6 @@
                 Raw joint positions carry sensor noise — micro-jitter that would corrupt any
                 downstream descriptor computation. The 1 Euro Filter resolves this.
             </p>
-
             <div class="stat-row">
                 <div class="stat-box">
                     <div class="stat-value blue">38</div>
@@ -1425,9 +1550,7 @@
                     <div class="stat-label">World-space coords<br>per joint (mm)</div>
                 </div>
             </div>
-
             <div class="kinematic-grid">
-                <!-- Skeleton SVG -->
                 <div class="skeleton-panel reveal">
                     <div class="skeleton-panel-header">
                         <span>BODY_38 Skeleton</span>
@@ -1436,52 +1559,41 @@
                     <div class="skeleton-svg-container">
                         <svg viewBox="0 0 200 330" width="180" height="297" xmlns="http://www.w3.org/2000/svg">
                             <g class="sk-sway">
-                            <!-- Bones -->
-                            <!-- Spine -->
                             <line class="sk-bone" x1="100" y1="148" x2="100" y2="125"/>
                             <line class="sk-bone" x1="100" y1="125" x2="100" y2="105"/>
                             <line class="sk-bone" x1="100" y1="105" x2="100" y2="85"/>
                             <line class="sk-bone" x1="100" y1="85"  x2="100" y2="68"/>
                             <line class="sk-bone" x1="100" y1="68"  x2="100" y2="48"/>
-                            <!-- Head -->
                             <line class="sk-bone" x1="100" y1="48" x2="88" y2="52"/>
                             <line class="sk-bone" x1="100" y1="48" x2="112" y2="52"/>
                             <line class="sk-bone" x1="88"  y1="52" x2="82" y2="58"/>
                             <line class="sk-bone" x1="112" y1="52" x2="118" y2="58"/>
-                            <!-- Left arm -->
                             <line class="sk-bone" x1="100" y1="85" x2="86"  y2="85"/>
                             <line class="sk-bone" x1="86"  y1="85" x2="72"  y2="90"/>
                             <line class="sk-bone" x1="72"  y1="90" x2="55"  y2="125"/>
                             <line class="sk-bone" x1="55"  y1="125" x2="38" y2="160"/>
-                            <!-- Left hand -->
                             <line class="sk-bone" x1="38" y1="160" x2="30" y2="170"/>
                             <line class="sk-bone" x1="38" y1="160" x2="34" y2="173"/>
                             <line class="sk-bone" x1="38" y1="160" x2="25" y2="168"/>
-                            <!-- Right arm -->
                             <line class="sk-bone" x1="100" y1="85" x2="114" y2="85"/>
                             <line class="sk-bone" x1="114" y1="85" x2="128" y2="90"/>
                             <line class="sk-bone" x1="128" y1="90" x2="145" y2="125"/>
                             <line class="sk-bone" x1="145" y1="125" x2="162" y2="160"/>
-                            <!-- Right hand -->
                             <line class="sk-bone" x1="162" y1="160" x2="170" y2="170"/>
                             <line class="sk-bone" x1="162" y1="160" x2="166" y2="173"/>
                             <line class="sk-bone" x1="162" y1="160" x2="175" y2="168"/>
-                            <!-- Left leg -->
                             <line class="sk-bone" x1="100" y1="148" x2="88"  y2="148"/>
                             <line class="sk-bone" x1="88"  y1="148" x2="84"  y2="215"/>
                             <line class="sk-bone" x1="84"  y1="215" x2="80"  y2="280"/>
                             <line class="sk-bone" x1="80"  y1="280" x2="78"  y2="290"/>
                             <line class="sk-bone" x1="78"  y1="290" x2="70"  y2="302"/>
                             <line class="sk-bone" x1="78"  y1="290" x2="77"  y2="304"/>
-                            <!-- Right leg -->
                             <line class="sk-bone" x1="100" y1="148" x2="112" y2="148"/>
                             <line class="sk-bone" x1="112" y1="148" x2="116" y2="215"/>
                             <line class="sk-bone" x1="116" y1="215" x2="120" y2="280"/>
                             <line class="sk-bone" x1="120" y1="280" x2="122" y2="290"/>
                             <line class="sk-bone" x1="122" y1="290" x2="130" y2="302"/>
                             <line class="sk-bone" x1="122" y1="290" x2="121" y2="304"/>
-
-                            <!-- Joints -->
                             <circle class="sk-joint" cx="100" cy="148" r="3"/>
                             <circle class="sk-joint" cx="100" cy="125" r="2.5"/>
                             <circle class="sk-joint-key" cx="100" cy="105" r="3.5"/>
@@ -1495,15 +1607,11 @@
                             <circle class="sk-joint" cx="86"  cy="85" r="2.5"/>
                             <circle class="sk-joint" cx="72"  cy="90" r="3"/>
                             <circle class="sk-joint" cx="55"  cy="125" r="3"/>
-                            <g class="sk-reach-left">
-                                <circle class="sk-joint-key" cx="38" cy="160" r="3.5"/>
-                            </g>
+                            <g class="sk-reach-left"><circle class="sk-joint-key" cx="38" cy="160" r="3.5"/></g>
                             <circle class="sk-joint" cx="114" cy="85" r="2.5"/>
                             <circle class="sk-joint" cx="128" cy="90" r="3"/>
                             <circle class="sk-joint" cx="145" cy="125" r="3"/>
-                            <g class="sk-reach-right">
-                                <circle class="sk-joint-key" cx="162" cy="160" r="3.5"/>
-                            </g>
+                            <g class="sk-reach-right"><circle class="sk-joint-key" cx="162" cy="160" r="3.5"/></g>
                             <circle class="sk-joint" cx="88"  cy="148" r="2.5"/>
                             <circle class="sk-joint" cx="112" cy="148" r="2.5"/>
                             <circle class="sk-joint" cx="84"  cy="215" r="3"/>
@@ -1515,8 +1623,6 @@
                     </div>
                     <div class="skeleton-panel-footer">38 joints · 3D world space</div>
                 </div>
-
-                <!-- Plots stack -->
                 <div class="kinematic-plots">
                     <div class="data-panel reveal reveal-delay-1">
                         <div class="data-panel-header">
@@ -1533,8 +1639,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Signal viz + params -->
             <div class="signal-viz-wrap reveal">
                 <div class="signal-viz-header">
                     <span>Adaptive Cutoff — How the Filter Works</span>
@@ -1552,7 +1656,6 @@
                     </div>
                 </div>
             </div>
-
             <div class="param-table reveal">
                 <div class="param-row">
                     <div class="param-name">min_cutoff = 1.0</div>
@@ -1572,7 +1675,6 @@
                         to single-frame velocity spikes.</div>
                 </div>
             </div>
-
             <h3>LMA Expansiveness — The First Metric</h3>
             <p>
                 Before the descriptor system runs in real time, the Expansiveness metric is computed
@@ -1617,7 +1719,6 @@
                 This ensures the virtual environment responds only to intentional expressive
                 movement, not postural micro-adjustments or sensor residuals.
             </p>
-
             <div class="descriptors reveal">
                 <div class="desc-card effort">
                     <div class="desc-lma">LMA Time — Sudden ↔ Sustained</div>
@@ -1656,13 +1757,11 @@
                     <div class="desc-output">→ <span>Niagara</span> · attractor strength &nbsp;·&nbsp; <span>MPC</span> · noise scale</div>
                 </div>
             </div>
-
             <h3>The Eight Action Drives</h3>
             <p>
                 Combinations of Effort, Expansiveness, and Weight produce the eight LMA
                 Action Drives as emergent output regions in descriptor space. The most
-                expressive work happens in transitions between archetypes, not inside any
-                single one.
+                expressive work happens in transitions between archetypes, not inside any single one.
             </p>
             <div class="drives-grid reveal">
                 <div class="drive-header">Drive</div>
@@ -1763,10 +1862,274 @@
         </div>
     </section>
 
-    <!-- ── 07 — Repositories ────────────────────────────────────────── -->
+    <!-- ── 07 — Media & Footage ──────────────────────────────────────── -->
+    <section id="media">
+        <div class="container">
+            <div class="section-label">07 — Media &amp; Footage</div>
+            <h2>Visual Materials<br>&amp; Recorded Output</h2>
+            <p>
+                Recorded footage across all development stages and operational modes of the system.
+                From the first proof-of-concept iteration using the Meta infrastructure through
+                to the final live VP compositing and LMA-driven interactive AR layer.
+            </p>
+
+            <!-- ── AV Production ─────────────────────────────────────── -->
+            <div class="media-category reveal">
+                <div class="media-category-header">
+                    <span class="media-category-tag gold">AV Production</span>
+                    <div class="media-category-line"></div>
+                </div>
+                <div class="media-category-title">Project Audio-Visual Production</div>
+                <p class="media-category-desc">
+                    The full audio-visual production document of the project. A produced piece
+                    that presents the complete system — from offline pipeline through to live
+                    AR performance — as a cohesive cinematic work.
+                </p>
+                <div class="media-grid cols-1">
+                    <div class="media-card">
+                        <div class="video-wrap">
+                            <!--
+                                TO EMBED THIS VIDEO, replace the placeholder div below with:
+
+                                YouTube:
+                                <iframe src="https://www.youtube.com/embed/YOUR_VIDEO_ID"
+                                        title="Kinematic AR — AV Production"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowfullscreen loading="lazy"></iframe>
+
+                                Vimeo:
+                                <iframe src="https://player.vimeo.com/video/YOUR_VIDEO_ID"
+                                        title="Kinematic AR — AV Production"
+                                        allow="autoplay; fullscreen; picture-in-picture"
+                                        allowfullscreen loading="lazy"></iframe>
+
+                                Direct file (GitHub LFS or CDN):
+                                <video controls preload="metadata" poster="assets/av_production_thumb.jpg">
+                                    <source src="media/av_production.mp4" type="video/mp4">
+                                </video>
+                            -->
+                            <iframe src="https://www.youtube.com/watch?v=ERXxgEQMVzg"
+                                        title="Kinematic AR — AV Production"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowfullscreen loading="lazy"></iframe>
+                            </div>
+                        </div>
+                        <div class="media-card-body">
+                            <div class="media-card-badge gold">AV Production · Full Length</div>
+                            <div class="media-card-title">Kinematic AR — Base-Free VP / AR / MoCap System</div>
+                            <p class="media-card-desc">
+                                Complete audio-visual production presenting the full pipeline:
+                                temporal alignment, spatial calibration, depth-correct compositing,
+                                and LMA-driven interactive AR in a live LED volume environment.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Iteration 1: Meta Infrastructure ─────────────────── -->
+            <div class="media-category reveal">
+                <div class="media-category-header">
+                    <span class="media-category-tag cyan">Iteration 01</span>
+                    <div class="media-category-line"></div>
+                </div>
+                <div class="media-category-title">Base-Free Camera Tracking — Meta Infrastructure</div>
+                <p class="media-category-desc">
+                    First iteration of the base-free adaptive tracking system, built on the Meta Quest 3
+                    as the SLAM tracker and a Canon M50 Mark II as the production camera. Demonstrates
+                    the core tracking-to-UE pipeline, adaptive sigma-based smoothing, and the shoulder
+                    rig configuration prior to the ZED 2i migration.
+                </p>
+                <div class="media-grid cols-2">
+                    <div class="media-card">
+                        <div class="video-wrap">
+                            <!--
+                                Replace this placeholder with your video embed.
+                                See AV Production block above for embedding instructions.
+                            -->
+                            <div class="video-placeholder">
+                                <div class="video-placeholder-ring">
+                                    <span class="video-placeholder-icon">▶</span>
+                                </div>
+                                <div class="video-placeholder-text">
+                                    Iteration 01<br>Embed video URL here
+                                </div>
+                            </div>
+                        </div>
+                        <div class="media-card-body">
+                            <div class="media-card-badge cyan">Meta Infrastructure · Raw Tracking</div>
+                            <div class="media-card-title">Adaptive Tracking — Meta Quest 3 + Canon M50</div>
+                            <p class="media-card-desc">
+                                Live tracking session showing the raw and smoothed camera pose
+                                output from the Meta Quest SLAM pipeline streamed into Unreal Engine 5
+                                via the custom AdaptiveSmoothingComponent.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="media-card">
+                        <div class="video-wrap">
+                            <!--
+                                Replace this placeholder with your video embed.
+                            -->
+                            <div class="video-placeholder">
+                                <div class="video-placeholder-ring">
+                                    <span class="video-placeholder-icon">▶</span>
+                                </div>
+                                <div class="video-placeholder-text">
+                                    Iteration 01<br>Embed video URL here
+                                </div>
+                            </div>
+                        </div>
+                        <div class="media-card-body">
+                            <div class="media-card-badge cyan">Meta Infrastructure · Sigma Models</div>
+                            <div class="media-card-title">Sigma Model Comparison — Linear / Sigmoid / Piecewise</div>
+                            <p class="media-card-desc">
+                                Comparison of the three adaptive smoothing models in operation,
+                                demonstrating the difference in responsiveness and lag behaviour
+                                across handheld, controlled, and fast aggressive camera movements.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Interactive AR — LMA Layer ─────────────────────────── -->
+            <div class="media-category reveal">
+                <div class="media-category-header">
+                    <span class="media-category-tag purple">Interactive AR</span>
+                    <div class="media-category-line"></div>
+                </div>
+                <div class="media-category-title">Interactive AR — LMA-Driven Embodied Layer</div>
+                <p class="media-category-desc">
+                    Footage of the Kinematic AR interactive mode in operation. The LMA descriptor
+                    system drives Niagara particle systems and WPO material deformations in real time
+                    from the live denoised ZED BODY_38 skeleton stream. Movement quality — Effort,
+                    Expansiveness, Weight, and Flow — modulates the virtual environment continuously.
+                </p>
+                <div class="media-grid cols-2">
+                    <div class="media-card">
+                        <div class="video-wrap">
+                            <!--
+                                Replace this placeholder with your video embed.
+                            -->
+                            <div class="video-placeholder">
+                                <div class="video-placeholder-ring">
+                                    <span class="video-placeholder-icon">▶</span>
+                                </div>
+                                <div class="video-placeholder-text">
+                                    Interactive AR<br>Embed video URL here
+                                </div>
+                            </div>
+                        </div>
+                        <div class="media-card-body">
+                            <div class="media-card-badge purple">LMA System · Runtime</div>
+                            <div class="media-card-title">Live LMA Descriptor Response — Niagara &amp; WPO</div>
+                            <p class="media-card-desc">
+                                Runtime capture showing the four LMA descriptors driving particle
+                                emission, attractor strength, and WPO surface deformation in
+                                response to live performer movement qualities.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="media-card">
+                        <div class="video-wrap">
+                            <!--
+                                Replace this placeholder with your video embed.
+                            -->
+                            <div class="video-placeholder">
+                                <div class="video-placeholder-ring">
+                                    <span class="video-placeholder-icon">▶</span>
+                                </div>
+                                <div class="video-placeholder-text">
+                                    Interactive AR<br>Embed video URL here
+                                </div>
+                            </div>
+                        </div>
+                        <div class="media-card-body">
+                            <div class="media-card-badge purple">LMA System · Action Drives</div>
+                            <div class="media-card-title">LMA Action Drive States — Slash, Glide, Float, Press</div>
+                            <p class="media-card-desc">
+                                Demonstration of the emergent LMA Action Drive archetypes produced
+                                by the descriptor space. Each drive produces a distinct visual
+                                response from the AR environment.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Compositing System ─────────────────────────────────── -->
+            <div class="media-category reveal">
+                <div class="media-category-header">
+                    <span class="media-category-tag blue">Compositing System</span>
+                    <div class="media-category-line"></div>
+                </div>
+                <div class="media-category-title">Depth-Correct Compositing System</div>
+                <p class="media-category-desc">
+                    Footage of the VP compositing pipeline in operation. Per-pixel depth comparison
+                    between the ZED reprojected depth map and the UE5 SceneDepth buffer produces
+                    correct real-world occlusion at every boundary. Recorded from the OWL Composure
+                    output channel as seen on the production monitor.
+                </p>
+                <div class="media-grid cols-2">
+                    <div class="media-card">
+                        <div class="video-wrap">
+                            <!--
+                                Replace this placeholder with your video embed.
+                            -->
+                            <div class="video-placeholder">
+                                <div class="video-placeholder-ring">
+                                    <span class="video-placeholder-icon">▶</span>
+                                </div>
+                                <div class="video-placeholder-text">
+                                    Compositing System<br>Embed video URL here
+                                </div>
+                            </div>
+                        </div>
+                        <div class="media-card-body">
+                            <div class="media-card-badge blue">Compositing · Static AR Objects</div>
+                            <div class="media-card-title">Depth-Correct Occlusion — Compositing Mode</div>
+                            <p class="media-card-desc">
+                                Live compositing output showing depth-correct occlusion with static
+                                AR objects. The performer correctly appears in front of and behind
+                                virtual elements as determined by the per-pixel depth comparison.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="media-card">
+                        <div class="video-wrap">
+                            <!--
+                                Replace this placeholder with your video embed.
+                            -->
+                            <div class="video-placeholder">
+                                <div class="video-placeholder-ring">
+                                    <span class="video-placeholder-icon">▶</span>
+                                </div>
+                                <div class="video-placeholder-text">
+                                    Compositing System<br>Embed video URL here
+                                </div>
+                            </div>
+                        </div>
+                        <div class="media-card-body">
+                            <div class="media-card-badge blue">Compositing · Moving Camera</div>
+                            <div class="media-card-title">Full Pipeline — Moving Camera with Tracked Virtual Scene</div>
+                            <p class="media-card-desc">
+                                Full production camera movement demonstrating base-free tracked
+                                compositing. The virtual scene follows the physical camera via ZED
+                                SLAM, maintaining correct perspective alignment throughout.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ── 08 — Repositories ────────────────────────────────────────── -->
     <section id="repos">
         <div class="container">
-            <div class="section-label">07 — Repositories</div>
+            <div class="section-label">08 — Repositories</div>
             <h2>System Architecture<br>Across Four Repos</h2>
             <p>
                 The project is structured as four independent repositories, each with a clearly
@@ -1792,20 +2155,14 @@
                         Sigma-based interpolation models: linear, sigmoid, piecewise.</div>
                     <div class="repo-arrow">→</div>
                 </a>
-                <a class="repo-row" href="#" target="_blank">
-                    <div class="repo-name">MoCap_VP_System</div>
-                    <div class="repo-desc">MoCap descriptor smoothing system. LMA category-based calibration.
-                        Denoise pipeline for body tracking descriptor scalars.</div>
-                    <div class="repo-arrow">→</div>
-                </a>
             </div>
         </div>
     </section>
 
-    <!-- ── 08 — References ──────────────────────────────────────────── -->
+    <!-- ── 09 — References ──────────────────────────────────────────── -->
     <section id="references">
         <div class="container">
-            <div class="section-label">08 — References</div>
+            <div class="section-label">09 — References</div>
             <h2>Theoretical &amp; Technical Grounding</h2>
             <div class="refs">
                 <div class="ref">
@@ -1922,7 +2279,6 @@
             scanX += 0.7;
             if (scanX > W + 120) scanX = -120;
 
-            // Draw faint grid
             ctx.strokeStyle = 'rgba(34,38,45,0.4)';
             ctx.lineWidth = 0.5;
             for (let x = 0; x < W; x += 60) {
@@ -1932,7 +2288,6 @@
                 ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
             }
 
-            // Draw scanning waveform
             const ww = 180;
             ctx.beginPath();
             ctx.strokeStyle = 'rgba(201,168,76,0.18)';
@@ -1948,7 +2303,6 @@
             }
             ctx.stroke();
 
-            // Draw particles (tracked joints)
             particles.forEach(p => {
                 p.x += p.vx; p.y += p.vy;
                 if (p.x < -10) p.x = W + 10;
@@ -1985,10 +2339,8 @@
         function frame() {
             ctx.clearRect(0, 0, W, H);
             tick++;
-
             const mid = H / 2;
 
-            // Noisy signal (raw)
             ctx.beginPath();
             ctx.strokeStyle = 'rgba(224,90,74,0.55)';
             ctx.lineWidth = 1.2;
@@ -2001,7 +2353,6 @@
             }
             ctx.stroke();
 
-            // Filtered signal (clean)
             ctx.beginPath();
             ctx.strokeStyle = 'rgba(74,127,165,0.9)';
             ctx.lineWidth = 2;
@@ -2028,14 +2379,12 @@
         const perfDot    = document.getElementById('performerDot');
         if (!grid) return;
 
-        // Grid geometry
         const COLS = 7, ROWS = 7, GAP = 28, PAD = 14;
-        const GW = (COLS - 1) * GAP;   // 168 — grid coordinate span
+        const GW = (COLS - 1) * GAP;
         const GH = (ROWS - 1) * GAP;
-        const CX = GW / 2;             // 84 — grid centre
+        const CX = GW / 2;
         const CY = GH / 2;
 
-        // LMA states: colour channels, spread (how far dots scatter), turbulence
         const STATES = [
             { name: 'Float',        col: [74,  138, 90],  spread: 1.0,  turb: 0.22 },
             { name: 'Slash',        col: [210, 95,  55],  spread: 2.4,  turb: 1.6  },
@@ -2044,7 +2393,6 @@
             { name: 'Wring',        col: [122, 74,  154], spread: 1.75, turb: 0.48 },
         ];
 
-        // Build dots anchored at grid origin; position via CSS transform only
         const dots = [];
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
@@ -2057,15 +2405,12 @@
             }
         }
 
-        // Remove CSS-controlled position from performer dot; JS drives left/top
         perfDot.style.left = (CX + PAD) + 'px';
         perfDot.style.top  = (CY + PAD) + 'px';
 
-        // Smoothstep + lerp helpers
         const lerp = (a, b, t) => a + (b - a) * t;
-        const stp  = x => x * x * (3 - 2 * x);   // smoothstep 0→1
+        const stp  = x => x * x * (3 - 2 * x);
 
-        // Lissajous 1:2 path — visits all four quadrants continuously
         const path = t => ({
             x: CX + Math.sin(t)           * CX * 0.64,
             y: CY + Math.sin(2 * t + 1.1) * CY * 0.64,
@@ -2076,14 +2421,12 @@
         let labelTimer = null;
 
         function loop() {
-            t += 0.007;   // ~15 s per full Lissajous cycle at 60 fps
+            t += 0.007;
 
-            // ── Performer position ──────────────────────────────────────
             const p = path(t);
             perfDot.style.left = (p.x + PAD) + 'px';
             perfDot.style.top  = (p.y + PAD) + 'px';
 
-            // ── Blended LMA state (5 states over one 2π cycle) ─────────
             const cycle = ((t % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
             const raw   = (cycle / (2 * Math.PI)) * STATES.length;
             const idxA  = Math.floor(raw) % STATES.length;
@@ -2097,7 +2440,6 @@
             const cg     = lerp(sA.col[1], sB.col[1], blend);
             const cb     = lerp(sA.col[2], sB.col[2], blend);
 
-            // ── Label — fade-swap on dominant state change ──────────────
             const domIdx = blend < 0.5 ? idxA : idxB;
             if (domIdx !== labelIdx) {
                 labelIdx = domIdx;
@@ -2112,26 +2454,22 @@
                 }, 200);
             }
 
-            // ── Grid dots ───────────────────────────────────────────────
-            const lerpF = 0.045 + spread * 0.012;   // faster lerp for chaotic states
+            const lerpF = 0.045 + spread * 0.012;
 
             dots.forEach(dot => {
-                const dx  = dot.ox - p.x;
-                const dy  = dot.oy - p.y;
+                const dx   = dot.ox - p.x;
+                const dy   = dot.oy - p.y;
                 const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
-                const inf  = Math.max(0, 1 - dist / 105);  // influence radius 105 px
+                const inf  = Math.max(0, 1 - dist / 105);
 
-                // Target position: origin + state-driven displacement
                 let tx = dot.ox + dx * (spread - 1) * inf;
                 let ty = dot.oy + dy * (spread - 1) * inf;
 
-                // Turbulence overlay (zero for Glide, max for Slash)
                 if (turb > 0.05) {
                     tx += Math.sin(t * 4.2 + dot.ox * 0.14 + dot.oy * 0.09) * turb * 13 * inf;
                     ty += Math.cos(t * 3.8 + dot.oy * 0.14 + dot.ox * 0.07) * turb * 13 * inf;
                 }
 
-                // Smooth lerp toward target (all in JS — no CSS transition)
                 dot.cx = lerp(dot.cx, tx, lerpF);
                 dot.cy = lerp(dot.cy, ty, lerpF);
 
