@@ -1273,19 +1273,19 @@
             <div class="hero-label">Virtual Production — Medialogy MSc · Aalborg University Copenhagen</div>
             <h1>Base-Free Tracking,<br>Depth <em>Occlusion</em><br>&amp; Embodied <em>AR</em></h1>
             <p class="hero-sub">
-                Synchronizing two cameras across time and space. Extracting and denoising a performer's
-                38-joint skeleton from raw depth data. Then driving a live LED volume not through
+                Synchronizing two cameras across temporally and spatially. Extracting and denoising a performer's
+                38-joint skeleton from raw depth data. Driving an nDispaly instance on an LED volume with base-free inside out tracking.
+                Driving a live AR performance system not through the geometric accuracy of skeletal
                 position — but through the expressive quality of movement itself.
             </p>
             <div class="hero-meta">
                 <span class="tag gold">Embodied Interaction</span>
-                <span class="tag">ZED 2i · Sony α</span>
-                <span class="tag cyan">ResNet · DTW</span>
-                <span class="tag cyan">ChArUco · Stereo</span>
-                <span class="tag blue">BODY_38 · 1 Euro Filter</span>
+                <span class="tag">Depth Camera · RGB Camera</span>
+                <span class="tag blue"> DTW . Savitzky-Golay</span>
+                <span class="tag cyan">Stereo Spatial Calibration</span>
+                <span class="tag blue">BODY_38 MoCap · 1 Euro Filter</span>
                 <span class="tag">LMA · Effort Theory</span>
                 <span class="tag purple">Unreal Engine 5</span>
-                <span class="tag">Muhannad Al Ulaby · 2026</span>
             </div>
             <div class="scroll-hint">
                 <div class="scroll-hint-line"></div>
@@ -1303,14 +1303,13 @@
                 The project establishes a complete Virtual Production pipeline in which two physically
                 co-located cameras — a Sony α mirrorless and a ZED 2i depth camera — are first
                 synchronized in time, then calibrated in space, and finally used as the perceptual
-                substrate for a live AR performance system. Each phase produces outputs that the
-                next phase requires: nothing in the runtime exists without the offline pipeline.
+                substrate for a live AR performance system.
             </p>
             <p>
-                The visible result is a live composited frame in which a performer stands in front
-                of physics-driven CG objects that correctly occlude and are occluded by their body,
-                while the expressive quality of their movement — not their position — continuously
-                reshapes the virtual environment around them.
+                The result is a full XR system with unified sensory input, providing a 
+                base-free, suite-free, mcontroller-free system. The system combines Virtual production,
+                and Augment Realitey to create a full immesive system, with an an emobided LMA-based interactive layer.
+                With that, the system operates in two different modes, a compositing mode, and an interactive mode.
             </p>
             <div class="pillars reveal">
                 <div class="pillar">
@@ -1324,8 +1323,7 @@
                     <div class="pillar-number">02 / SPATIAL</div>
                     <h4>Stereo Calibration</h4>
                     <p>ChArUco-board stereo calibration computes the intrinsic matrices and the
-                        extrinsic transform between the Sony and ZED optical centres. The resulting
-                        UE5 offset is applied to a CineCamera actor at startup.</p>
+                        extrinsic transform between the RGB and depth cameras' optical centres.</p>
                 </div>
                 <div class="pillar">
                     <div class="pillar-number">03 / KINEMATIC</div>
@@ -1679,19 +1677,19 @@
             <p>
                 Before the descriptor system runs in real time, the Expansiveness metric is computed
                 offline as an analytical validation of the denoised skeleton stream. It measures the
-                maximum reach distance from the midspine (<code>spine_2</code>) to either wrist
-                — the most direct proxy for the performer's use of kinesphere space in Laban's sense.
-                Peaks correspond to large open gestures; valleys mark arms held close to the body.
+                maximum reach distance from the midspine (<code>spine_2</code>) to either wrist and elbow
+                (the most direct proxies for the performer's use of kinesphere space in Laban's sense)
+                The signal peaks correspond to large open gestures; valleys mark arms held close to the body.
             </p>
             <div class="data-panel reveal">
                 <div class="data-panel-header">
                     <span class="data-panel-title blue">LMA Kinesphere Expansiveness</span>
-                    <span class="data-panel-badge">max(spine_2 → left_wrist, spine_2 → right_wrist)</span>
+                    <span class="data-panel-badge">(spine_2 → left_wrist, spine_2 → right_wrist, spine_2 → left_elbow, spine_2 → right_elbow)</span>
                 </div>
                 <img src="assets/lma_expansiveness.png"
                      alt="LMA Expansiveness metric over time: spine_2 to distal wrist distance in mm" />
                 <div class="data-panel-caption">
-                    Y-axis: Euclidean distance from <code>spine_2</code> to the furthest wrist, in mm.
+                    Y-axis: Euclidean distance from <code>spine_2</code> to each wrist and elbow, in mm.
                     Computed from raw (unfiltered) positions to preserve full dynamic range.
                     This time-series is the foundational validation for the Expansiveness descriptor
                     used in the live system.
@@ -1704,17 +1702,18 @@
     <section id="embodied">
         <div class="container">
             <div class="section-label purple">05 — Embodied Interaction</div>
-            <h2>Four Qualities.<br>Continuous. Real-Time.</h2>
+            <h2>Four Qualities - Real-Time Interaction</h2>
             <p>
-                The system does not classify gesture types or respond to body position.
+                The system does not classify gesture types or respond only to body position.
                 It computes four continuous scalar descriptors from the live denoised ZED
                 skeletal stream on every tick, each corresponding to one of Laban's four Effort factors.
                 The eight canonical LMA Action Drives emerge as regions in the resulting
                 four-dimensional quality space rather than being explicitly detected.
             </p>
             <p>
-                Each descriptor output passes through a calibrated sigmoid output curve that
-                establishes a perceptual dead zone — below which incidental movement produces
+                Each descriptor output passes through a calibrated one Euro filter
+                which serves as an adaptive smoothing and gating mechanism. The filter's cutoff frequency
+                is tuned per-descriptor to create a dead zone around the neutral point of each quality dimension, producing
                 no AR response — and a saturation threshold above which the response plateaus.
                 This ensures the virtual environment responds only to intentional expressive
                 movement, not postural micro-adjustments or sensor residuals.
@@ -1732,10 +1731,10 @@
                 <div class="desc-card expand">
                     <div class="desc-lma">LMA Space — Expanded ↔ Contracted</div>
                     <h4>Expansiveness</h4>
-                    <p>Maximum distance from either wrist to <code>spine_2</code>. The maximum
-                        of two wrists captures kinesphere reach correctly — the largest spatial
+                    <p>The distance from the wrists and elbows to <code>spine_2</code>. The distance
+                        of each of those limbs to the spine captures kinesphere reach correctly. The spatial
                         gesture defines the body's spatial attitude. Force direction follows
-                        the wrist-to-spine vector.</p>
+                        the limb-to-spine vector.</p>
                     <div class="desc-output">→ <span>MPC</span> · WPO deformation frequency · RadialForce radius</div>
                 </div>
                 <div class="desc-card weight">
@@ -1750,10 +1749,10 @@
                 <div class="desc-card flow">
                     <div class="desc-lma">LMA Flow — Free ↔ Bound</div>
                     <h4>Flow</h4>
-                    <p>Rolling standard deviation of velocity delta over a 30-frame window.
-                        High sigma — velocity is erratic, unpredictable — reads as Free.
-                        Low sigma — velocity changes predictably — reads as Bound. Serves
-                        simultaneously as the internal smoothing control variable.</p>
+                    <p>
+                        The variability of movement over time. High flow — erratic, unpredictable — reads as Free.
+                        Low flow — changes predictably — reads as Bound.
+                    </p>
                     <div class="desc-output">→ <span>Niagara</span> · attractor strength &nbsp;·&nbsp; <span>MPC</span> · noise scale</div>
                 </div>
             </div>
@@ -1835,9 +1834,7 @@
                 <div class="demo-description reveal">
                     <p>
                         The demonstration places the performer at the centre of a three-dimensional
-                        grid of physics-simulated cubic objects in an LED volume. The grid is
-                        permanently anchored to the performer's pelvis joint — the body stays at
-                        the centre of the formation regardless of movement through the stage.
+                        grid of physics-simulated cubic objects.
                     </p>
                     <p>
                         Cubes in front of the performer are occluded by the depth comparison
@@ -1846,16 +1843,15 @@
                         renegotiates these depth relationships in three dimensions.
                     </p>
                     <p>
-                        The grid responds to movement quality, not position. An arm thrust forward
+                        The grid responds to movement quality. An arm thrust forward
                         with high force pushes the grid forward along the arm's direction vector.
                         A slow open expansion spreads the grid outward. A sudden explosive movement
                         scatters the cubes and floods the space with particles.
                     </p>
                     <div class="demo-note">
-                        The system reads the body's expressive state, not its location.
+                        The system reads the body's expressive state, not only its location.
                         A stationary performer exerting high muscular tension produces a
                         different grid response than the same position held without tension.
-                        The LMA drive states cycle in the visualisation above.
                     </div>
                 </div>
             </div>
@@ -1866,12 +1862,7 @@
     <section id="media">
         <div class="container">
             <div class="section-label">07 — Media &amp; Footage</div>
-            <h2>Visual Materials<br>&amp; Recorded Output</h2>
-            <p>
-                Recorded footage across all development stages and operational modes of the system.
-                From the first proof-of-concept iteration using the Meta infrastructure through
-                to the final live VP compositing and LMA-driven interactive AR layer.
-            </p>
+            <h2>Visual Materials &amp; Recorded Output</h2>
 
             <!-- ── AV Production ─────────────────────────────────────── -->
         <div class="media-category reveal">
@@ -1883,7 +1874,7 @@
             <p class="media-category-desc">
                 The full audio-visual production document of the project. A produced piece
                 that presents the complete system — from offline pipeline through to live
-                AR performance — as a cohesive cinematic work.
+                AR performance.
             </p>
             <div class="media-grid cols-1">
                 <div class="media-card">
@@ -1909,15 +1900,14 @@
             <!-- ── Iteration 1: Meta Infrastructure ─────────────────── -->
         <div class="media-category reveal">
             <div class="media-category-header">
-                <span class="media-category-tag cyan">Iteration 01</span>
+                <span class="media-category-tag cyan">Iteration 01 - The Meta Infrastructure</span>
                 <div class="media-category-line"></div>
             </div>
-            <div class="media-category-title">Base-Free Camera Tracking — Meta Infrastructure</div>
+            <div class="media-category-title">Base-Free Camera Tracking</div>
             <p class="media-category-desc">
                 First iteration of the base-free adaptive tracking system, built on the Meta Quest 3
-                as the SLAM tracker and a Canon M50 Mark II as the production camera. Demonstrates
-                the core tracking-to-UE pipeline, adaptive sigma-based smoothing, and the shoulder
-                rig configuration prior to the ZED 2i migration.
+                as the SLAM tracker. Demonstrates
+                the core tracking-to-UE pipeline, and the adaptive sigma-based smoothing, prior to the ZED 2i migration.
             </p>
             <div class="media-grid cols-1">
                 <div class="media-card">
@@ -1974,24 +1964,21 @@
             </div>
         </div>
 
-        <!-- ── Compositing System ─────────────────────────────────── -->
+        <!-- ── Recorded Output ─────────────────────────────────── -->
         <div class="media-category reveal">
             <div class="media-category-header">
-                <span class="media-category-tag blue">Compositing System</span>
+                <span class="media-category-tag blue">Output Examples</span>
                 <div class="media-category-line"></div>
             </div>
-            <div class="media-category-title">Depth-Correct Compositing System</div>
+            <div class="media-category-title">Recorded Output Examples</div>
             <p class="media-category-desc">
-                Footage of the VP compositing pipeline in operation. Per-pixel depth comparison
-                between the ZED reprojected depth map and the UE5 SceneDepth buffer produces
-                correct real-world occlusion at every boundary. Recorded from the OWL Composure
-                output channel as seen on the production monitor.
+                Footage of the VP compositing pipeline in operation.
             </p>
             <div class="media-grid cols-1">
                 <div class="media-card">
                     <div class="video-wrap">
                         <iframe src="https://www.youtube.com/embed/fPNLmA8y9Q0"
-                                title="Interactive AR — LMA Descriptor Response"
+                                title="Examples of the full system output"
                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                 allowfullscreen loading="lazy"></iframe>
                     </div>
@@ -2000,8 +1987,7 @@
                         <div class="media-card-title">Depth-Correct Occlusion — Full VP Compositing Mode</div>
                         <p class="media-card-desc">
                             Live compositing output showing depth-correct occlusion with the full
-                            VP pipeline active. The performer correctly appears in front of and
-                            behind virtual elements as determined by the per-pixel depth comparison.
+                            VP pipeline active.
                         </p>
                     </div>
                 </div>
@@ -2013,9 +1999,9 @@
     <section id="repos">
         <div class="container">
             <div class="section-label">08 — Repositories</div>
-            <h2>System Architecture<br>Across Four Repos</h2>
+            <h2>System Architecture<br>Across three Repos</h2>
             <p>
-                The project is structured as four independent repositories, each with a clearly
+                The project is structured as three independent repositories, each with a clearly
                 scoped responsibility. The offline pipeline repos produce configuration outputs
                 and validated kinematic data that the runtime repo consumes at startup.
             </p>
