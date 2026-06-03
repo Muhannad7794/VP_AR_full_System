@@ -1888,27 +1888,7 @@
                 <div class="media-grid cols-1">
                     <div class="media-card">
                         <div class="video-wrap">
-                            <!--
-                                TO EMBED THIS VIDEO, replace the placeholder div below with:
-
-                                YouTube:
-                                <iframe src="https://www.youtube.com/embed/YOUR_VIDEO_ID"
-                                        title="Kinematic AR — AV Production"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowfullscreen loading="lazy"></iframe>
-
-                                Vimeo:
-                                <iframe src="https://player.vimeo.com/video/YOUR_VIDEO_ID"
-                                        title="Kinematic AR — AV Production"
-                                        allow="autoplay; fullscreen; picture-in-picture"
-                                        allowfullscreen loading="lazy"></iframe>
-
-                                Direct file (GitHub LFS or CDN):
-                                <video controls preload="metadata" poster="assets/av_production_thumb.jpg">
-                                    <source src="media/av_production.mp4" type="video/mp4">
-                                </video>
-                            -->
-                            <iframe src="https://www.youtube.com/watch?v=ERXxgEQMVzg"
+                            <iframe src="https://www.youtube.com/embed/ERXxgEQMVzg"
                                         title="Kinematic AR — AV Production"
                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                         allowfullscreen loading="lazy"></iframe>
@@ -1928,202 +1908,111 @@
             </div>
 
             <!-- ── Iteration 1: Meta Infrastructure ─────────────────── -->
-            <div class="media-category reveal">
-                <div class="media-category-header">
-                    <span class="media-category-tag cyan">Iteration 01</span>
-                    <div class="media-category-line"></div>
-                </div>
-                <div class="media-category-title">Base-Free Camera Tracking — Meta Infrastructure</div>
-                <p class="media-category-desc">
-                    First iteration of the base-free adaptive tracking system, built on the Meta Quest 3
-                    as the SLAM tracker and a Canon M50 Mark II as the production camera. Demonstrates
-                    the core tracking-to-UE pipeline, adaptive sigma-based smoothing, and the shoulder
-                    rig configuration prior to the ZED 2i migration.
-                </p>
-                <div class="media-grid cols-2">
-                    <div class="media-card">
-                        <div class="video-wrap">
-                            <!--
-                                Replace this placeholder with your video embed.
-                                See AV Production block above for embedding instructions.
-                            -->
-                            <div class="video-placeholder">
-                                <div class="video-placeholder-ring">
-                                    <span class="video-placeholder-icon">▶</span>
-                                </div>
-                                <div class="video-placeholder-text">
-                                    Iteration 01<br>Embed video URL here
-                                </div>
-                            </div>
-                        </div>
-                        <div class="media-card-body">
-                            <div class="media-card-badge cyan">Meta Infrastructure · Raw Tracking</div>
-                            <div class="media-card-title">Adaptive Tracking — Meta Quest 3 + Canon M50</div>
-                            <p class="media-card-desc">
-                                Live tracking session showing the raw and smoothed camera pose
-                                output from the Meta Quest SLAM pipeline streamed into Unreal Engine 5
-                                via the custom AdaptiveSmoothingComponent.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="media-card">
-                        <div class="video-wrap">
-                            <!--
-                                Replace this placeholder with your video embed.
-                            -->
-                            <div class="video-placeholder">
-                                <div class="video-placeholder-ring">
-                                    <span class="video-placeholder-icon">▶</span>
-                                </div>
-                                <div class="video-placeholder-text">
-                                    Iteration 01<br>Embed video URL here
-                                </div>
-                            </div>
-                        </div>
-                        <div class="media-card-body">
-                            <div class="media-card-badge cyan">Meta Infrastructure · Sigma Models</div>
-                            <div class="media-card-title">Sigma Model Comparison — Linear / Sigmoid / Piecewise</div>
-                            <p class="media-card-desc">
-                                Comparison of the three adaptive smoothing models in operation,
-                                demonstrating the difference in responsiveness and lag behaviour
-                                across handheld, controlled, and fast aggressive camera movements.
-                            </p>
-                        </div>
-                    </div>
-                </div>
+<div class="media-category reveal">
+    <div class="media-category-header">
+        <span class="media-category-tag cyan">Iteration 01</span>
+        <div class="media-category-line"></div>
+    </div>
+    <div class="media-category-title">Base-Free Camera Tracking — Meta Infrastructure</div>
+    <p class="media-category-desc">
+        First iteration of the base-free adaptive tracking system, built on the Meta Quest 3
+        as the SLAM tracker and a Canon M50 Mark II as the production camera. Demonstrates
+        the core tracking-to-UE pipeline, adaptive sigma-based smoothing, and the shoulder
+        rig configuration prior to the ZED 2i migration.
+    </p>
+    <div class="media-grid cols-1">
+        <div class="media-card">
+            <div class="video-wrap">
+                <iframe src="https://www.youtube.com/embed/5R5AaW-q3Pk"
+                        title="Base-Free Tracking — Meta Infrastructure"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen loading="lazy"></iframe>
             </div>
-
-            <!-- ── Interactive AR — LMA Layer ─────────────────────────── -->
-            <div class="media-category reveal">
-                <div class="media-category-header">
-                    <span class="media-category-tag purple">Interactive AR</span>
-                    <div class="media-category-line"></div>
-                </div>
-                <div class="media-category-title">Interactive AR — LMA-Driven Embodied Layer</div>
-                <p class="media-category-desc">
-                    Footage of the Kinematic AR interactive mode in operation. The LMA descriptor
-                    system drives Niagara particle systems and WPO material deformations in real time
-                    from the live denoised ZED BODY_38 skeleton stream. Movement quality — Effort,
-                    Expansiveness, Weight, and Flow — modulates the virtual environment continuously.
+            <div class="media-card-body">
+                <div class="media-card-badge cyan">Meta Infrastructure · Iteration 01</div>
+                <div class="media-card-title">Adaptive Tracking — Meta Quest 3 + Canon M50</div>
+                <p class="media-card-desc">
+                    Live tracking session showing the raw and smoothed camera pose output
+                    from the Meta Quest SLAM pipeline streamed into Unreal Engine 5
+                    via the custom AdaptiveSmoothingComponent.
                 </p>
-                <div class="media-grid cols-2">
-                    <div class="media-card">
-                        <div class="video-wrap">
-                            <!--
-                                Replace this placeholder with your video embed.
-                            -->
-                            <div class="video-placeholder">
-                                <div class="video-placeholder-ring">
-                                    <span class="video-placeholder-icon">▶</span>
-                                </div>
-                                <div class="video-placeholder-text">
-                                    Interactive AR<br>Embed video URL here
-                                </div>
-                            </div>
-                        </div>
-                        <div class="media-card-body">
-                            <div class="media-card-badge purple">LMA System · Runtime</div>
-                            <div class="media-card-title">Live LMA Descriptor Response — Niagara &amp; WPO</div>
-                            <p class="media-card-desc">
-                                Runtime capture showing the four LMA descriptors driving particle
-                                emission, attractor strength, and WPO surface deformation in
-                                response to live performer movement qualities.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="media-card">
-                        <div class="video-wrap">
-                            <!--
-                                Replace this placeholder with your video embed.
-                            -->
-                            <div class="video-placeholder">
-                                <div class="video-placeholder-ring">
-                                    <span class="video-placeholder-icon">▶</span>
-                                </div>
-                                <div class="video-placeholder-text">
-                                    Interactive AR<br>Embed video URL here
-                                </div>
-                            </div>
-                        </div>
-                        <div class="media-card-body">
-                            <div class="media-card-badge purple">LMA System · Action Drives</div>
-                            <div class="media-card-title">LMA Action Drive States — Slash, Glide, Float, Press</div>
-                            <p class="media-card-desc">
-                                Demonstration of the emergent LMA Action Drive archetypes produced
-                                by the descriptor space. Each drive produces a distinct visual
-                                response from the AR environment.
-                            </p>
-                        </div>
-                    </div>
-                </div>
             </div>
-
-            <!-- ── Compositing System ─────────────────────────────────── -->
-            <div class="media-category reveal">
-                <div class="media-category-header">
-                    <span class="media-category-tag blue">Compositing System</span>
-                    <div class="media-category-line"></div>
-                </div>
-                <div class="media-category-title">Depth-Correct Compositing System</div>
-                <p class="media-category-desc">
-                    Footage of the VP compositing pipeline in operation. Per-pixel depth comparison
-                    between the ZED reprojected depth map and the UE5 SceneDepth buffer produces
-                    correct real-world occlusion at every boundary. Recorded from the OWL Composure
-                    output channel as seen on the production monitor.
-                </p>
-                <div class="media-grid cols-2">
-                    <div class="media-card">
-                        <div class="video-wrap">
-                            <!--
-                                Replace this placeholder with your video embed.
-                            -->
-                            <div class="video-placeholder">
-                                <div class="video-placeholder-ring">
-                                    <span class="video-placeholder-icon">▶</span>
-                                </div>
-                                <div class="video-placeholder-text">
-                                    Compositing System<br>Embed video URL here
-                                </div>
-                            </div>
-                        </div>
-                        <div class="media-card-body">
-                            <div class="media-card-badge blue">Compositing · Static AR Objects</div>
-                            <div class="media-card-title">Depth-Correct Occlusion — Compositing Mode</div>
-                            <p class="media-card-desc">
-                                Live compositing output showing depth-correct occlusion with static
-                                AR objects. The performer correctly appears in front of and behind
-                                virtual elements as determined by the per-pixel depth comparison.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="media-card">
-                        <div class="video-wrap">
-                            <!--
-                                Replace this placeholder with your video embed.
-                            -->
-                            <div class="video-placeholder">
-                                <div class="video-placeholder-ring">
-                                    <span class="video-placeholder-icon">▶</span>
-                                </div>
-                                <div class="video-placeholder-text">
-                                    Compositing System<br>Embed video URL here
-                                </div>
-                            </div>
-                        </div>
-                        <div class="media-card-body">
-                            <div class="media-card-badge blue">Compositing · Moving Camera</div>
-                            <div class="media-card-title">Full Pipeline — Moving Camera with Tracked Virtual Scene</div>
-                            <p class="media-card-desc">
-                                Full production camera movement demonstrating base-free tracked
-                                compositing. The virtual scene follows the physical camera via ZED
-                                SLAM, maintaining correct perspective alignment throughout.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
+    </div>
+</div>
+
+<!-- ── Interactive AR — LMA Layer ─────────────────────────── -->
+<div class="media-category reveal">
+    <div class="media-category-header">
+        <span class="media-category-tag purple">Interactive AR</span>
+        <div class="media-category-line"></div>
+    </div>
+    <div class="media-category-title">Interactive AR — LMA-Driven Embodied Layer</div>
+    <p class="media-category-desc">
+        Footage of the Kinematic AR interactive mode in operation. The LMA descriptor
+        system drives Niagara particle systems and WPO material deformations in real time
+        from the live denoised ZED BODY_38 skeleton stream. Movement quality — Effort,
+        Expansiveness, Weight, and Flow — modulates the virtual environment continuously.
+    </p>
+    <div class="media-grid cols-1">
+        <div class="media-card">
+            <div class="video-wrap">
+                <iframe src="https://www.youtube.com/embed/VP_CdlAEdGg"
+                        title="Interactive AR — LMA Descriptor Response"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen loading="lazy"></iframe>
+            </div>
+            <div class="media-card-body">
+                <div class="media-card-badge purple">LMA System · Runtime</div>
+                <div class="media-card-title">Live LMA Descriptor Response — Niagara &amp; WPO</div>
+                <p class="media-card-desc">
+                    Runtime capture showing the four LMA descriptors driving particle
+                    emission, attractor strength, and WPO surface deformation in
+                    response to live performer movement qualities.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Compositing System ─────────────────────────────────── -->
+<div class="media-category reveal">
+    <div class="media-category-header">
+        <span class="media-category-tag blue">Compositing System</span>
+        <div class="media-category-line"></div>
+    </div>
+    <div class="media-category-title">Depth-Correct Compositing System</div>
+    <p class="media-category-desc">
+        Footage of the VP compositing pipeline in operation. Per-pixel depth comparison
+        between the ZED reprojected depth map and the UE5 SceneDepth buffer produces
+        correct real-world occlusion at every boundary. Recorded from the OWL Composure
+        output channel as seen on the production monitor.
+    </p>
+    <div class="media-grid cols-1">
+        <div class="media-card">
+            <div class="video-wrap">
+                <!-- Replace this placeholder with your embed when ready -->
+                <div class="video-placeholder">
+                    <div class="video-placeholder-ring">
+                        <span class="video-placeholder-icon">▶</span>
+                    </div>
+                    <div class="video-placeholder-text">
+                        Compositing System<br>Embed video URL here
+                    </div>
+                </div>
+            </div>
+            <div class="media-card-body">
+                <div class="media-card-badge blue">Compositing · Final Pipeline</div>
+                <div class="media-card-title">Depth-Correct Occlusion — Full VP Compositing Mode</div>
+                <p class="media-card-desc">
+                    Live compositing output showing depth-correct occlusion with the full
+                    VP pipeline active. The performer correctly appears in front of and
+                    behind virtual elements as determined by the per-pixel depth comparison.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
     </section>
 
     <!-- ── 08 — Repositories ────────────────────────────────────────── -->
