@@ -1283,10 +1283,10 @@
             <div class="hero-label">Virtual Production — Medialogy MSc · Aalborg University Copenhagen</div>
             <h1>Base-Free Tracking,<br>Depth <em>Occlusion</em><br>&amp; Embodied <em>AR</em></h1>
             <p class="hero-sub">
-                Synchronizing two cameras across temporally and spatially. Extracting and denoising a performer's
-                38-joint skeleton from raw depth data. Driving an nDispaly instance on an LED volume with base-free inside out tracking.
-                Driving a live AR performance system not through the geometric accuracy of skeletal
-                position — but through the expressive quality of movement itself.
+                Synchronizing two cameras temporally and spatially. Driving an nDispaly instance on an LED volume with base-free inside out tracking.
+                 Extracting and denoising a performer's
+                38-joint skeleton from raw depth data. Driving a live AR performance system not through the geometric accuracy of skeletal
+                position, but through the expressive quality of movement itself.
             </p>
             <div class="hero-meta">
                 <span class="tag gold">Embodied Interaction</span>
@@ -1312,28 +1312,38 @@
             <p>
                 The project establishes a complete Virtual Production pipeline in which two physically
                 co-located cameras — a Sony α mirrorless and a ZED 2i depth camera — are first
-                synchronized in time, then calibrated in space, and finally used as the perceptual
-                substrate for a live AR performance system.
+                synchronized in time, then calibrated in space. This results a uni-sensor system
+                where the ZED 2i acts as the driving source of
+                <list style="margin-left: 20px; margin-top: 8px;">
+                    <li>SLAM-based Base-free Tracking</li>
+                    <li>Depth sensor for real-time Occlusion Mapping</li>
+                    <li>a 38-joint skeleton for MoCap and embodied interaction.</li>
             </p>
             <p>
                 The result is a full XR system with unified sensory input, providing a 
-                base-free, suite-free, mcontroller-free system. The system combines Virtual production,
-                and Augment Realitey to create a full immesive system, with an an emobided LMA-based interactive layer.
-                With that, the system operates in two different modes, a compositing mode, and an interactive mode.
+                base-free, suite-free, controller-free system.
+                <br>
+                The system combines Virtual production,and Augment Realitey to create a full immesive system,
+                with an emobided LMA-based interactive layer. With that, the system operates in two different modes, 
+                a compositing mode, and an interactive mode.
+                
             </p>
             <div class="pillars reveal">
                 <div class="pillar">
                     <div class="pillar-number">01 / TEMPORAL</div>
                     <h4>Camera Sync</h4>
-                    <p>ResNet visual feature extraction and Dynamic Time Warping align two independently
-                        clocked cameras frame-by-frame. Savitzky-Golay smoothing absorbs hardware
+                    <p>ResNet visual feature extraction and Dynamic Time Warping align the two independently
+                        clocked cameras frame-by-frame. After that, the Savitzky-Golay smoothing algorithm
+                        is used to absorb hardware
                         clock drift before synced frames are written.</p>
                 </div>
                 <div class="pillar">
                     <div class="pillar-number">02 / SPATIAL</div>
                     <h4>Stereo Calibration</h4>
                     <p>ChArUco-board stereo calibration computes the intrinsic matrices and the
-                        extrinsic transform between the RGB and depth cameras' optical centres.</p>
+                        extrinsic transform between the RGB and depth cameras' optical centres. The spatial
+                        alignment is the core enabler of a clean persepcive-correct compositing and accurate skeleton reprojection.
+                    </p>
                 </div>
                 <div class="pillar">
                     <div class="pillar-number">03 / KINEMATIC</div>
@@ -1345,9 +1355,9 @@
                 <div class="pillar">
                     <div class="pillar-number">04 / EMBODIED</div>
                     <h4>Kinematic AR</h4>
-                    <p>Four continuous LMA Effort scalars computed from the denoised skeleton
-                        drive Niagara particle systems and UE5 material WPO deformations.
-                        Movement quality — not position — modulates the virtual environment.</p>
+                    <p>Four continuous LMA Effort scalars computed from the denoised skeleton data.
+                        The cleaned skeletal data drives the Niagara particle systems and UE5 material WPO deformations.
+                        Movement quality — not position — modulates the interactive virtual particles.</p>
                 </div>
             </div>
         </div>
@@ -1359,14 +1369,13 @@
             <div class="section-label cyan">02 — The Pipeline</div>
             <h2>From Raw Footage<br>to Live AR Performance</h2>
             <p>
-                Phases 1 through 3 are an offline pre-production pipeline. They transform raw
-                camera recordings into calibration data and a clean kinematic signal. Phase 4
-                is the real-time runtime that consumes those outputs. The two halves are
-                decoupled — calibration runs once per recording setup; the runtime runs at every performance.
+                The system consists of four main taechnical phases. Each phase has an offline, Python-based,
+                containerized implementation, followed by a C++ real-time implmentation, and blueprints configuration
+                inside Unreal Engine 5. 
             </p>
             <div class="pipeline-flow reveal">
                 <div class="pipeline-node p1">
-                    <div class="pipeline-num">Phase 01 — Offline</div>
+                    <div class="pipeline-num">Phase 01</div>
                     <h4>Temporal Alignment</h4>
                     <div class="pipeline-techs">
                         <span class="pipeline-tech">ResNet visual feature extraction</span>
@@ -1384,14 +1393,14 @@
                     </svg>
                 </div>
                 <div class="pipeline-node p2">
-                    <div class="pipeline-num">Phase 02 — Offline</div>
+                    <div class="pipeline-num">Phase 02</div>
                     <h4>Spatial Calibration</h4>
                     <div class="pipeline-techs">
                         <span class="pipeline-tech">ChArUco corner detection</span>
                         <span class="pipeline-tech">OpenCV stereo calibration</span>
                         <span class="pipeline-tech">Reprojection error validation</span>
                     </div>
-                    <div class="pipeline-output">→ Camera matrices · UE5 offset</div>
+                    <div class="pipeline-output">→ UE Camera offset · Depth Reprojection </div>
                 </div>
                 <div class="pipeline-connector">
                     <svg width="48" height="40" viewBox="0 0 48 40">
@@ -1402,14 +1411,14 @@
                     </svg>
                 </div>
                 <div class="pipeline-node p3">
-                    <div class="pipeline-num">Phase 03 — Offline</div>
+                    <div class="pipeline-num">Phase 03</div>
                     <h4>Kinematic Extraction</h4>
                     <div class="pipeline-techs">
                         <span class="pipeline-tech">ZED SDK BODY_38 tracking</span>
                         <span class="pipeline-tech">1 Euro Filter — per-joint</span>
                         <span class="pipeline-tech">LMA Expansiveness metric</span>
                     </div>
-                    <div class="pipeline-output">→ Denoised 38-joint stream</div>
+                    <div class="pipeline-output">→ Denoised MoCap Tracking</div>
                 </div>
                 <div class="pipeline-connector">
                     <svg width="48" height="40" viewBox="0 0 48 40">
@@ -1420,12 +1429,12 @@
                     </svg>
                 </div>
                 <div class="pipeline-node p4">
-                    <div class="pipeline-num">Phase 04 — Runtime</div>
-                    <h4>Live AR Performance</h4>
+                    <div class="pipeline-num">Phase 04</div>
+                    <h4>Runtime Launch</h4>
                     <div class="pipeline-techs">
-                        <span class="pipeline-tech">ZED SLAM — 6-DoF tracking</span>
-                        <span class="pipeline-tech">UE5 Composure — depth occlusion</span>
-                        <span class="pipeline-tech">Niagara · WPO — LMA response</span>
+                        <span class="pipeline-tech">ZED SLAM — 6-DoF Tracking</span>
+                        <span class="pipeline-tech">ZED Depth —  AR Occlusion</span>
+                        <span class="pipeline-tech">ZED MoCap — Niagara · WPO — LMA response</span>
                     </div>
                     <div class="pipeline-output">→ Composited live AR frame</div>
                 </div>
@@ -1440,7 +1449,8 @@
             <h2>Two Cameras,<br>One Reference Frame</h2>
             <p>
                 The Sony α and ZED 2i are mounted on the same rig but operate as fully independent
-                devices: different sensors, different internal clocks, different optical centres.
+                devices, and are utilized for completly different purposes.<br>
+                They have different sensors, different internal clocks, and different optical centres.<br>
                 The alignment pipeline resolves both the <em>temporal</em> desynchronisation
                 (when did they see the same moment?) and the <em>spatial</em> offset (exactly
                 how far apart are their optical centres, and at what angle?).
@@ -1463,8 +1473,7 @@
                         </div>
                         <img src="assets/drift_comparison.jpg" alt="Temporal drift comparison: raw DTW vs Savitzky-Golay smoothed" />
                         <div class="data-panel-caption">
-                            Blue: raw DTW frame-to-frame offset. Orange: Savitzky-Golay smoothed mapping.
-                            The close overlap confirms minimal hardware clock drift in this recording session.
+                            Blue: raw DTW frame-to-frame offset. Red: Savitzky-Golay smoothed mapping.
                         </div>
                     </div>
                 </div>
@@ -1495,12 +1504,10 @@
                     <div class="data-panel">
                         <div class="data-panel-header">
                             <span class="data-panel-title cyan">Reprojection Error Analysis</span>
-                            <span class="data-panel-badge">dataset_04 · rated Good</span>
                         </div>
                         <img src="assets/reprojection_error_analysis.png" alt="Per-frame reprojection error bar chart and distribution" />
                         <div class="data-panel-caption">
                             Per-frame mean reprojection error across all 36 validated frame pairs.
-                            Mean: 1.71 px · 0 frames above the 2.5 px failure threshold.
                         </div>
                     </div>
                 </div>
