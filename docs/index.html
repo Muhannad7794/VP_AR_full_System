@@ -1284,8 +1284,9 @@
             <h1>Base-Free Tracking,<br>Depth <em>Occlusion</em><br>&amp; Embodied <em>AR</em></h1>
             <p class="hero-sub">
                 Synchronizing two cameras temporally and spatially. Driving an nDispaly instance on an LED volume with base-free inside out tracking.
-                 Extracting and denoising a performer's
-                38-joint skeleton from raw depth data. Driving a live AR performance system not through the geometric accuracy of skeletal
+                Creating a real-time occlusion map from depth data to composite virtual elements with correct perspective and layering.
+                 Extracting and denoising a performer's 38-joint skeleton from raw depth data.
+                 Driving a live AR performance system not through the geometric accuracy of skeletal
                 position, but through the expressive quality of movement itself.
             </p>
             <div class="hero-meta">
@@ -1323,8 +1324,8 @@
                 The result is a full XR system with unified sensory input, providing a 
                 base-free, suite-free, controller-free system.
                 <br>
-                The system combines Virtual production,and Augment Realitey to create a full immesive system,
-                with an emobided LMA-based interactive layer. With that, the system operates in two different modes, 
+                The system combines Virtual production, and Augmented Reality to create a full immersive system,
+                with an embodied LMA-based interactive layer. With that, the system operates in two different modes, 
                 a compositing mode, and an interactive mode.
                 
             </p>
@@ -1469,7 +1470,6 @@
                     <div class="data-panel reveal reveal-delay-1">
                         <div class="data-panel-header">
                             <span class="data-panel-title">Temporal Drift</span>
-                            <span class="data-panel-badge">dataset_04</span>
                         </div>
                         <img src="assets/drift_comparison.jpg" alt="Temporal drift comparison: raw DTW vs Savitzky-Golay smoothed" />
                         <div class="data-panel-caption">
@@ -1548,7 +1548,7 @@
                 The ZED SDK's <code>HUMAN_BODY_ACCURATE</code> model tracks 38 joints in the
                 BODY_38 format at 30 Hz, outputting 3D world-space coordinates in millimetres for
                 every joint in every frame where the performer's root (pelvis) is confidently located.
-                Raw joint positions carry sensor noise — micro-jitter that would corrupt any
+                Raw joint positions carry sensor noise that corrupt any
                 downstream descriptor computation. The 1 Euro Filter resolves this.
             </p>
             <div class="stat-row">
@@ -1731,7 +1731,7 @@
                 Each descriptor output passes through a calibrated one Euro filter
                 which serves as an adaptive smoothing and gating mechanism. The filter's cutoff frequency
                 is tuned per-descriptor to create a dead zone around the neutral point of each quality dimension, producing
-                no AR response — and a saturation threshold above which the response plateaus.
+                no AR response, and a saturation threshold above which the response plateaus.
                 This ensures the virtual environment responds only to intentional expressive
                 movement, not postural micro-adjustments or sensor residuals.
             </p>
@@ -1890,7 +1890,7 @@
             <div class="media-category-title">Project Audio-Visual Production</div>
             <p class="media-category-desc">
                 The full audio-visual production document of the project. A produced piece
-                that presents the complete system — from offline pipeline through to live
+                that presents the complete system from offline pipeline through to live
                 AR performance.
             </p>
             <div class="media-grid cols-1">
