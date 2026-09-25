@@ -16,17 +16,27 @@ docker compose build --no-cache
 - One mp4 file.
 - One svo file.
 
-## ⏱️ Phase 1: Temporal Alignment
+## 🧩 Phase 1: Frame Extraction
+Once your raw files are in place, run the extraction pipeline with a single command.
+Replace <dataset name> with the exact name of the dataset:
+
+```
+docker compose run --rm sync ./run_extract.sh <dataset name>
+```
+**What This Does:**
+- Extracts the RGB video into individual RGB .PNG files.
+- Extracts the SVO data into individual frames of 3 types: depth, confidence, and RGB.
+- Saves the extracted frames into data/extracted/<dataset name>/.
+
+## ⏱️ Phase 2: Temporal Alignment
 Once your raw files are in place, run the entire extraction and syncing pipeline with a single command.
 
-Replace <dataset name> with the exact name of your folder:
+Replace <dataset name> with the exact name of the dataset:
 
 ```
 docker compose run --rm sync ./run_temporal.sh <dataset name>
 ```
 **What This Does:**
-- Extracts the ZED video completely, then extracts the RGB video completely.
-
 - Analyzes every frame using a ResNet50 neural network.
 
 - Aligns the frames in time using Dynamic Time Warping (DTW).
@@ -77,10 +87,10 @@ docker compose run --rm sync ./run_temporal.sh <dataset name>
 
 ---
 
-## 📐 Phase 2: Spatial Alignment
+## 📐 Phase 3: Spatial Alignment
 Once the cameras are matched in time, the system calculates the optical and geometric relationship between the two cameras. This is a two-step process: curating frames, then running the calibration pipeline.
 
-###  2.1 Record a Calibration Dataset
+###  3.1 Record a Calibration Dataset
 Before picking frames, record a dedicated calibration clip using the ChArUco board:
 
 - Use the board printed from calib_io_charuco_200x150_8x11_15_11_DICT_4X4.pdf (A3 print, mounted flat on rigid cardboard).
@@ -90,7 +100,7 @@ Before picking frames, record a dedicated calibration clip using the ChArUco boa
 - Record for 3–4 minutes. Run Phase 1 on this recording to get synchronized frames.
 
 
-###  2.2 Pick the Best Frames
+###  3.2 Pick the Best Frames
 Do not feed thousands of frames into the spatial calibrator. The algorithm requires a curated set of 30 to 50 perfect frame pairs with geometric diversity.
 The Golden Rule: Every frame must show the ChArUco board razor-sharp with zero motion blur.
 Open data/synced/<dataset>/sony_rgb/ and select frames covering these four categories:
@@ -105,7 +115,7 @@ Open data/synced/<dataset>/sony_rgb/ and select frames covering these four categ
 - Find the exact same frame number in data/synced/<dataset>/zed_rgb/ and copy it to data/picked_for_alignment/<dataset>/zed_rgb/.
 - Repeat until you have 30–50 matched pairs in both folders.
 
-###  2.3 Run the Spatial Calibrator
+###  3.3 Run the Spatial Calibrator
 Once you have your curated set of frames, run the spatial calibration pipeline:
 ```
 docker compose run --rm sync ./run_spatial.sh <dataset name>
@@ -297,7 +307,7 @@ The terminal output mirrors the `ue5_offset` block from `spatial_calibration.jso
 
 > Tthese values can beplugged directly into the UE5 CineCamera actor so the FOV and viewing output exactly matches the physical camera. No unit conversion needed — the system outputs centimetres, which is the native unit UE5 expects for this field.
 
-### 2.4 Diagnostic Tools
+### 3.4 Diagnostic Tools
 To validate the calibration, a custom validation pipeline is made to evaluate the calibration quality and point out any potentail issues.
 The pipleine can be run with the following command:
 ```
@@ -305,8 +315,8 @@ docker compose run --rm align python3 spatial_alignment/diagnose_detection.py --
 ```
 This tests all supported ArUco dictionary variants and board size combinations and identifies the working configuration.
 
-## 🦴 Phase 3: Kinematic Extraction and Filtering
-With the cameras spatially calibrated, Phase 3 extracts the performer's 3D skeletal data from the ZED SVO recording, denoises each joint trajectory using the 1 Euro Filter, and computes the LMA Expansiveness metric as a proxy for the performer's use of kinesphere space.
+## 🦴 Phase 4: Kinematic Extraction and Filtering
+With the cameras spatially calibrated, Phase 4 extracts the performer's 3D skeletal data from the ZED SVO recording, denoises each joint trajectory using the 1 Euro Filter, and computes the LMA Expansiveness metric as a proxy for the performer's use of kinesphere space.
 
 Run the full pipeline with a single command:
 
@@ -375,14 +385,14 @@ Plots the maximum reach distance from `spine_2` to either wrist over time — a 
 ![LMA Expansiveness](data/plots/dataset_01/kinematics/lma_expansiveness.png)
 
 > The y-axis is the Euclidean distance in mm from `spine_2` to the furthest wrist. Peaks correspond to large gestural reaches; valleys indicate arms held close to the body. This metric is computed from raw (unfiltered) wrist positions to preserve the full dynamic range of the gesture signal.
-The LMA Expansiveness metric and the filtered joint trajectories produced in Phase 3 serve as the analytical foundation for the Embodied Interaction layer described in Phase 4. 
+The LMA Expansiveness metric and the filtered joint trajectories produced in Phase 4 serve as the analytical foundation for the Embodied Interaction layer described in Phase 4. 
 The 1 Euro Filter parameters validated here (`min_cutoff=1.0`, `beta=0.05`) are the same parameters applied at runtime inside the UE5 C++ component to denoise the live ZED skeletal stream before descriptor computation.
 
 ---
 
-## 🕺 Phase 4: Embodied Interaction — Kinematic AR
+## 🕺 Phase 5: Embodied Interaction — Kinematic AR
 
-Phase 4 extends the compositing pipeline into a live action-perception 
+Phase 5 extends the compositing pipeline into a live action-perception 
 coupling system. The performer's movement qualities — derived from the 
 filtered 38-joint skeletal stream — drive the behaviour of foreground CG 
 elements rendered in Unreal Engine 5. The system is grounded in Laban 
@@ -400,7 +410,7 @@ level reload required:
 
 ---
 
-### 4.1 The Four LMA Descriptors
+### 5.1 The Four LMA Descriptors
 
 The system computes four scalar values from the live ZED BODY_38 skeletal 
 stream each tick. Each corresponds to one of Laban's four Effort factors.
@@ -421,7 +431,7 @@ quality — not a positional fact separate from it.
 
 ---
 
-### 4.2 The Eight LMA Action Drives
+### 5.2 The Eight LMA Action Drives
 
 The four descriptors combine to produce the eight canonical LMA Action Drives 
 as continuous emergent regions rather than discrete classifications. The system 
@@ -441,7 +451,7 @@ continuously within the four-dimensional Effort space.
 
 ---
 
-### 4.3 CG Element Design — Particle Grid
+### 5.3 CG Element Design — Particle Grid
 
 The demonstration scenario places the performer at the centre of a 
 three-dimensional grid of physics-simulated cubic objects in the LED volume. 
@@ -464,7 +474,7 @@ The grid simultaneously demonstrates all three technical pillars of the system:
 
 ---
 
-### 4.4 Runtime Architecture
+### 5.4 Runtime Architecture
 
 The EI runtime is implemented in the `VP_AR_full_System_runtime` repository 
 as two UE5 C++ Actor Components:
@@ -501,9 +511,9 @@ The Niagara system `NS_KinematicAR` exposes two User Parameters:
 
 ---
 
-### 4.5 Smoothing Models as Artistic Parameters
+### 5.5 Smoothing Models as Artistic Parameters
 
-The adaptive smoothing system from Phase 3 (1 Euro Filter) handles geometric 
+The adaptive smoothing system from Phase 4 (1 Euro Filter) handles geometric 
 sensor noise suppression on the raw joint stream. On top of this, the output 
 descriptors pass through a calibrated adaptive interpolation stage before 
 reaching the visual outputs. Three mapping models are available, selectable 
@@ -536,6 +546,7 @@ to distinct movement traditions:
 | `data/extracted/<dataset>/sony_rgb/` | All raw Sony frames extracted from the MP4 |
 | `data/extracted/<dataset>/zed_rgb/` | All raw ZED left-eye frames extracted from the SVO2 |
 | `data/extracted/<dataset>/zed_depth/` | All raw 16-bit ZED depth maps |
+| `data/extracted/<dataset>/zed_confidence/` | All raw 8-bit ZED confidence maps |
 | `data/json_output/<dataset>/frame_mapping.json` | Temporal alignment mapping based on similarity algorithm and DTW |
 | `data/json_output/<dataset>/smoothed_frame_mapping.json` | Savitzky-Golay filtered mapping |
 | `data/plots/<dataset>/drift_comparison.jpg` | Raw vs. smoothed temporal drift graph |
