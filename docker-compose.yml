@@ -7,7 +7,7 @@ services:
     command: tail -f /dev/null
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
-      - ./run_extraction.sh:/VP_AR_full_System_dockerized/run_extraction.sh
+      - ./run_extract.sh:/VP_AR_full_System_dockerized/run_extract.sh
     deploy:
       resources:
         reservations:
