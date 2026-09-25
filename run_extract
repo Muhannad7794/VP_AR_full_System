@@ -1,0 +1,14 @@
+# Ensure the user provided a dataset argument
+if [ -z "$1" ]; then
+  echo "Usage: ./run_extract.sh <dataset_name>"
+  echo "Example: ./run_extract.sh dataset_01"
+  exit 1
+fi
+
+DATASET=$1
+echo "===================================================="
+echo "Starting Full extract Pipeline for dataset: $DATASET"
+echo "===================================================="
+
+echo "Extracting Frames from Raw Video..."
+python3 ./extract_frames.py --dataset "$DATASET"
