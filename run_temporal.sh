@@ -12,19 +12,17 @@ echo "===================================================="
 echo "Starting Full Temporal Pipeline for dataset: $DATASET"
 echo "===================================================="
 
-# echo "[1/5] Extracting Frames from Raw Video..."
-# python3 temporal_alignment/extract_frames.py --dataset "$DATASET"
 
-# echo "[2/5] Syncing Frames via AI & DTW..."
-# python3 temporal_alignment/sync_frames.py --dataset "$DATASET"
+echo "[1/4] Syncing Frames via AI & DTW..."
+python3 temporal_alignment/sync_frames.py --dataset "$DATASET"
 
-echo "[3/5] Smoothing DTW Mapping..."
+echo "[2/4] Smoothing DTW Mapping..."
 python3 temporal_alignment/smooth_frames_mapping.py --dataset "$DATASET"
 
-echo "[4/5] Comparing Mappings..."
+echo "[3/4] Comparing Mappings..."
 python3 temporal_alignment/compare_mappings.py --dataset "$DATASET"
 
-echo "[5/5] Compiling Clean Dataset..."
+echo "[4/4] Compiling Clean Dataset..."
 python3 temporal_alignment/compile_dataset.py --dataset "$DATASET"
 
 echo "===================================================="

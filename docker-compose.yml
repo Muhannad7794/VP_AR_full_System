@@ -1,4 +1,21 @@
 services:
+
+  # Extract frames from raw data
+  extract:
+    build: .
+    container_name: frames_extraction
+    command: tail -f /dev/null
+    volumes:
+      - ./data:/VP_AR_full_System_dockerized/data
+      - ./run_extraction.sh:/VP_AR_full_System_dockerized/run_extraction.sh
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+              
   # Temporal synchronizer
   sync:
     build: .
