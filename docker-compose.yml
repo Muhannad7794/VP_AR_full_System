@@ -67,3 +67,20 @@ services:
               - driver: nvidia
                 count: all
                 capabilities: [gpu]
+
+  # Occlusion Refinement pipeline
+  occlusion:
+    build: .
+    container_name: occlusion_refinement
+    command: tail -f /dev/null
+    volumes:
+      - ./data:/VP_AR_full_System_dockerized/data
+      - ./occlusion_refinement:/VP_AR_full_System_dockerized/occlusion_refinement
+      - ./run_occlusion.sh:/VP_AR_full_System_dockerized/run_occlusion.sh
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

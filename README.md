@@ -21,7 +21,7 @@ Once your raw files are in place, run the extraction pipeline with a single comm
 Replace <dataset name> with the exact name of the dataset:
 
 ```
-docker compose run --rm sync ./run_extract.sh <dataset name>
+docker compose run --rm extract ./run_extract.sh <dataset name>
 ```
 **What This Does:**
 - Extracts the RGB video into individual RGB .PNG files.
