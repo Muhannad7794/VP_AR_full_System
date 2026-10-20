@@ -21,7 +21,7 @@ Once your raw files are in place, run the extraction pipeline with a single comm
 Replace <dataset name> with the exact name of the dataset:
 
 ```
-docker compose run --rm extract ./run_extract.sh <dataset name>
+docker compose run --rm sync ./run_extract.sh <dataset name>
 ```
 **What This Does:**
 - Extracts the RGB video into individual RGB .PNG files.
@@ -37,19 +37,19 @@ Replace <dataset name> with the exact name of the dataset:
 docker compose run --rm sync ./run_temporal.sh <dataset name>
 ```
 **What This Does:**
-- Analyzes every frame using a ResNet50 neural network.
+- Extracts a feature vector from every frame using a pre-trained ResNet18 network (`sync_frames.py`).
 
-- Aligns the frames in time using Dynamic Time Warping (DTW).
+- Aligns the two frame sequences in time using FastDTW (an approximate Dynamic Time Warping) with cosine distance between the feature vectors.
 
-- Smooths any hardware clock drift via Savitzky-Golay filtering.
+- Removes local jitter from the mapping with a median filter (`smooth_frames_mapping.py`, default window of 31 frames). The filter suppresses jitter; it does not model clock drift.
 
-- Copies the perfectly synced frames into data/synced/<dataset name>/.
+- Copies the aligned frames into data/synced/<dataset name>/. See [2.1 Known Limits and the Valid Frame Window](#21-known-limits-and-the-valid-frame-window) before using the full range of a dataset.
 
 **Temporal Drift Result — dataset_04:**
 
 ![Drift Comparison](data/plots/dataset_04/drift_comparison.jpg)
 
-> The blue curve shows the raw frame-to-frame offset detected by DTW. The orange curve is the Savitzky-Golay smoothed mapping that is actually applied when copying synced frames. The close overlap here confirms minimal hardware clock drift in dataset_04.
+> The blue curve shows the raw frame-to-frame offset detected by DTW. The orange curve is the median-filtered mapping that is actually applied when copying synced frames. The close overlap shows that the filter changed the DTW result very little in dataset_04.
 
 **Output: `frame_mapping.json`** — raw DTW alignment mapping from Sony frame index to ZED frame index:
 
@@ -68,7 +68,7 @@ docker compose run --rm sync ./run_temporal.sh <dataset name>
 
 > Each key is a Sony frame number; the value is the ZED frame that was closest in visual content at that moment. Gaps or jumps (e.g., `"3": 34`) reflect hardware clock desync that DTW has corrected.
 
-**Output: `smoothed_frame_mapping.json`** — Savitzky-Golay filtered version of the same mapping:
+**Output: `smoothed_frame_mapping.json`** — median-filtered version of the same mapping:
 
 ```json
 {
@@ -118,7 +118,7 @@ Open data/synced/<dataset>/sony_rgb/ and select frames covering these four categ
 ###  3.3 Run the Spatial Calibrator
 Once you have your curated set of frames, run the spatial calibration pipeline:
 ```
-docker compose run --rm sync ./run_spatial.sh <dataset name>
+docker compose run --rm align ./run_spatial.sh <dataset name>
 ```
 **What This Does:**
 
@@ -531,6 +531,186 @@ to distinct movement traditions:
 
 ---
 
+## 🎭 Phase 6: Occlusion Refinement
+
+Phase 6 improves the ZED depth map that decides where CG is hidden behind the performer. The depth map is produced on the Jetson, streamed to Unreal Engine over NDI, reprojected into the Sony camera view and compared with the CG depth in the compositing material. Errors in the depth map appear as CG showing through the performer (show-through) or as halos around the silhouette.
+
+**Where each part runs**
+
+| Part | Location | Role |
+|---|---|---|
+| `zed_ndi_streamer.py` | Jetson | Retrieves ZED depth, applies the refinement, publishes NDI source `ZED_Depth_Stream` |
+| `M_ZED_DepthReproject` | UE5 | Reprojects the ZED depth map into the Sony camera view (custom HLSL node) |
+| `M_DepthOcclusionComposite` | UE5 | Compares reprojected ZED depth with CG depth and blends the CG over the Sony plate |
+| `occlusion_refinement/` | This repository | Offline validation of the refinement stages on recorded datasets |
+
+**Refinement stages and their status**
+
+| Stage | Purpose | Status |
+|---|---|---|
+| 1. Confidence gating | Remove depth pixels the ZED marks as unreliable | Validated offline on dataset_01. Implemented in the streamer |
+| 1b. Hole fill | Replace removed pixels by the closest valid neighbouring depth, so a removed pixel does not become "far" | Implemented in the streamer. Behaviour on the rig is still to be validated |
+| 2. Guided filtering | Edge-preserving smoothing guided by the Sony image | Planned (online) |
+| 3. Segmentation-guided alpha refinement | Refine the occlusion edge using a performer mask | Planned (online) |
+| 4. Confidence-weighted temporal smoothing | Reduce frame-to-frame flicker | Planned (online) |
+| 5. Morphological polish | Remove small speckles and holes in the final mask | Planned (online) |
+
+Stages 2 to 5 are not implemented. Offline versions would need frame-accurate pairing between the Sony and ZED frames (see [2.1](#21-known-limits-and-the-valid-frame-window)), so the current plan is to build them in the live path only.
+
+---
+
+### 6.1 Offline Validation of Stage 1
+
+```
+docker compose run --rm occlusion ./run_occlusion.sh <dataset name>
+```
+
+Options of `occlusion_refinement/validate_occlusion.py`:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--confidence-threshold` | 50 | Pixels with a confidence value above this are removed (lower value = more reliable pixel) |
+| `--trim-start` | 1000 | Frames excluded from the start of the dataset |
+| `--trim-end` | 1000 | Frames excluded from the end of the dataset |
+| `--sample-count` | 12 | Number of sample frames selected by amount of scene motion |
+| `--frames` | none | Extra frame indices to include as samples |
+
+The first and last frames of a recording show the performer operating the cameras, so they are excluded from every statistic, plot and sample. For dataset_01 the analysed range was frames 400 to 6049.
+
+**What This Does:**
+- Reads the synced `zed_depth` and `zed_confidence` frames of the analysed range.
+- Applies the confidence gate and records, per frame, the share of valid depth pixels that the gate removes.
+- Computes a scene motion value per frame (mean absolute depth change against the frame 5 frames earlier) and selects sample frames spread from slow to fast movement.
+- Saves the plots, sample figures and a JSON report listed below.
+
+**Result on dataset_01** (confidence threshold 50, frames 400 to 6049):
+
+| Statistic | Value |
+|---|---|
+| Mean share of valid pixels removed | 0.64 % |
+| Median | 0.54 % |
+| Maximum | 1.93 % (frame 1111) |
+| Empty-room baseline (static furniture edges) | about 0.42 % |
+
+Mean removal by section of the recording:
+
+| Frames | Mean removed | Note |
+|---|---|---|
+| 400 to 949 | 0.54 % | |
+| 950 to 1881 | 0.99 % | Performer moves closer to and further from the camera |
+| 1882 to 2300 | 0.49 % | |
+| 2300 to 3000 | 0.65 % | |
+| 3000 to 4700 | 0.59 % | |
+| 4700 to 6049 | 0.52 % | |
+
+The removed pixels concentrate on silhouette edges, in the gaps between the arms and the torso, and in a few regions on the body that repeat at the same locations over time. Because those regions repeat, a temporal hold cannot fill them, and the fill has to come from the surrounding pixels of the same frame (Stage 1b).
+
+**Limits of this metric.** The share of removed pixels is a proxy for show-through incidence. It shows that the gate targets the right pixels. It does not measure how often CG is actually composited incorrectly, which needs the live compositor. The occlusion edge error is not computed because it depends on Stages 2 and 3.
+
+**Output: `occlusion_stage1_report.json`**
+
+```json
+{
+  "meta": {
+    "dataset": "dataset_01",
+    "stage": "confidence_gating",
+    "confidence_threshold": 50,
+    "analysed_range": { "first_frame": 400, "last_frame": 6049, "trim_start": 400, "trim_end": 942 }
+  },
+  "summary": {
+    "mean_pct_rejected_of_previously_valid_pixels": 0.636,
+    "median_pct_rejected_of_previously_valid_pixels": 0.543,
+    "max_pct_rejected_of_previously_valid_pixels": 1.929,
+    "frame_with_max_rejection": 1111
+  },
+  "samples": [
+    { "sample": 1, "frame_idx": "...", "reason": "...", "file": "sample_01_frame_<index>.png" }
+  ],
+  "per_frame": [
+    {
+      "frame_idx": "...",
+      "n_valid_depth_pixels": "...",
+      "n_removed_pixels": "...",
+      "pct_rejected_of_previously_valid_pixels": "...",
+      "motion_energy_mm": "..."
+    }
+  ]
+}
+```
+
+> The `summary` values are those of the dataset_01 run; the `samples` and `per_frame` entries show the field layout only. `pct_rejected_of_previously_valid_pixels` is the number of pixels removed by the gate divided by the number of pixels with a non-zero depth in the extracted dataset. `motion_energy_mm` is `null` for the first frames of the range, where there is no earlier frame to compare against.
+
+---
+
+### 6.2 Online Implementation: `zed_ndi_streamer.py`
+
+The streamer sets `RuntimeParameters.confidence_threshold` on the ZED SDK, which removes the unreliable pixels during grab (they arrive as NaN), then fills them and publishes the result.
+
+**Why the fill is needed.** Writing a removed pixel as "far" tells the compositor to show CG at that pixel. At the silhouette this places a ring of CG on the performer, which is more visible than the error the gate removes. Each removed pixel is therefore replaced by the closest valid depth within `--fill-radius` pixels. Only removed pixels are modified, and pixels without a valid neighbour in range stay "far". Showing the real plate where CG should have been visible in a narrow gap is a smaller visual error than showing CG on the performer.
+
+```
+python3 zed_ndi_streamer.py [--confidence 50] [--fill-radius 4] [--bypass]
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--confidence` | 50 | Confidence threshold applied by the ZED SDK (SDK default is 95) |
+| `--fill-radius` | 4 | Fill reach in pixels. `0` disables the fill |
+| `--bypass` | off | Start with the original behaviour (SDK default confidence, no fill) |
+
+**Console commands** (type the command in the streamer terminal and press Enter):
+
+| Command | Effect |
+|---|---|
+| `b` | Toggle bypass for an A/B comparison on the live image |
+| `c <0-100>` | Change the confidence threshold while running |
+| `f <0-25>` | Change the fill radius while running |
+| `h` | Print the command list |
+
+**Timing log.** Every 5 seconds the streamer prints the frame rate, the mean and maximum time of capture, processing and sending, the share of pixels without data and the share of pixels filled:
+
+```
+[TIMING] REFINED fps= 29.9 | grab+retrieve  24.1/ 31.0 ms | process   6.2/  9.8 ms | send   4.0/  6.1 ms | no-data  0.62% | filled  0.51%
+```
+
+> The values above illustrate the format. The `process` column is the cost added by the refinement and the packing. Compare it against the 33 ms frame budget at 30 fps on the Jetson.
+
+OpenCV (`cv2`) is used for the fill when it is installed. Without it a NumPy implementation produces the same result at a higher cost.
+
+**`ZEDLiveLinkConfig.json`.** No change is needed for occlusion. The `confidence` entry under `BodyTrackingParameters` is the body detection confidence and is unrelated to the depth confidence threshold. The LiveLink sender receives the SDK stream and computes its own depth for body tracking, so the streamer's threshold affects only the NDI depth output.
+
+---
+
+### 6.3 Unreal Engine Side: `M_DepthOcclusionComposite`
+
+The material normalises the CG depth to the same 0.5 m to 6.0 m range as the ZED depth and then evaluates:
+
+| Node | Operation |
+|---|---|
+| `Depth Diff — positive means CG is closer` | ZED depth minus CG depth (both normalised) |
+| Add with `DepthBias` | Adds the bias to the difference |
+| `Is CG Closer` | 1 when the sum is greater than 0, otherwise 0 |
+| `CG Exists` | 1 where CG depth is below the far plane, otherwise 0 |
+| `Final Composite` (Lerp) | A = Sony RGB, B = CG colour, Alpha = `Is CG Closer` × `CG Exists` |
+
+Two consequences follow from this graph:
+
+- A ZED value of far (1.0) always lets CG show wherever CG exists. A removed pixel written as far therefore shows CG (see 6.2).
+- `DepthBias` favours CG. One unit of normalised depth is 550 cm, so the current value of 0.075 corresponds to about 41 cm. CG up to about 41 cm behind the real surface still shows. Lower values hide CG sooner, but the 8-bit depth has a step of about 2.16 cm (one quantisation level), so a bias below roughly 0.01 (about 5 cm) may flicker where CG touches a real surface. This is to be confirmed with the procedure below.
+
+**Procedure for choosing `DepthBias`.** Test each value (for example 0.075, 0.03, 0.01, 0.0) with two scenes: (1) a CG object 20 to 40 cm behind the performer's hand, which shows whether CG still shows through, and (2) a CG object resting on the floor or touching a wall, which shows whether the CG edge flickers. Record the lowest value that passes both.
+
+**Evaluation record** (to be filled in after the rig tests):
+
+| Measurement | Bypass | Refined |
+|---|---|---|
+| Lowest stable `DepthBias` | | |
+| Visible show-through behind the hand (yes / no) | | |
+| Silhouette halo (yes / no) | | |
+| Added processing time per frame (ms) | not applicable | |
+
+---
+
 ## 🔗 Related Repositories
 
 | Repository | Role |
@@ -548,11 +728,12 @@ to distinct movement traditions:
 | `data/extracted/<dataset>/zed_depth/` | All raw 16-bit ZED depth maps |
 | `data/extracted/<dataset>/zed_confidence/` | All raw 8-bit ZED confidence maps |
 | `data/json_output/<dataset>/frame_mapping.json` | Temporal alignment mapping based on similarity algorithm and DTW |
-| `data/json_output/<dataset>/smoothed_frame_mapping.json` | Savitzky-Golay filtered mapping |
+| `data/json_output/<dataset>/smoothed_frame_mapping.json` | Median-filtered mapping |
 | `data/plots/<dataset>/drift_comparison.jpg` | Raw vs. smoothed temporal drift graph |
 | `data/synced/<dataset>/sony_rgb/` | Temporally aligned Sony frames |
 | `data/synced/<dataset>/zed_rgb/` | Temporally aligned ZED frames |
 | `data/synced/<dataset>/zed_depth/` | Temporally aligned depth maps |
+| `data/synced/<dataset>/zed_confidence/` | Temporally aligned confidence maps |
 | `data/inspected/<dataset>/sony_rgb/` | Sony frames that passed the ChArUco detection threshold |
 | `data/inspected/<dataset>/zed_rgb/` | ZED frames that passed the ChArUco detection threshold |
 | `data/plots/<dataset>/spatial/detection_check/` | Annotated frames with detected corners and counts |
@@ -570,3 +751,7 @@ to distinct movement traditions:
 | `data/extracted/<dataset>/kinematics/raw_skeleton_data.csv` | Raw 38-joint 3D coordinates (mm) per tracked frame |
 | `data/plots/<dataset>/kinematics/1Euro_noise_reduction_{joint}_{axis}.png` | Raw vs. 1 Euro filtered coordinate signal for target joint |
 | `data/plots/<dataset>/kinematics/lma_expansiveness.png` | LMA Kinesphere Expansiveness metric over time |
+| `data/json_output/<dataset>/occlusion_stage1_report.json` | Stage 1 confidence gating statistics, per-frame rejection rates and selected samples |
+| `data/plots/<dataset>/occlusion/confidence_gating_rejection_rate.png` | Share of valid depth pixels removed by the gate over time, with the scene motion trace |
+| `data/plots/<dataset>/occlusion/rejection_frequency_map.png` | Per-pixel frequency of removal across the analysed range |
+| `data/plots/<dataset>/occlusion/samples/` | Sample frames selected by scene motion, showing depth before and after the gate |
