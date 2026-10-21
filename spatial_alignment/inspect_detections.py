@@ -1,238 +1,306 @@
 """
 inspect_detections.py
 =====================
-Diagnostic tool for the spatial alignment pipeline.
+Step 1 of the spatial alignment pipeline.
 
-Runs ChArUco corner detection on every frame in picked_for_alignment/
-and saves annotated images showing which corners were detected.
+Detects the ChArUco board once in every synced frame of both cameras and
+stores the results, so every later step works on identical detections.
 
-Run this BEFORE stereo_calibrate.py to verify the board is detectable
-in both cameras and to identify any blurry or problematic frames
-that should be removed before calibration.
+For every frame and camera it records:
+    - the detected corner ids and sub-pixel positions
+    - whether the view is usable (enough corners, spread over the board)
+    - the board motion in pixels (median corner displacement against the
+      frames STILL_OFFSET indices before and after) and whether the board is
+      still (motion at most the stillness threshold of that camera)
 
-Output:
-    data/plots/<dataset>/spatial/detection_check/
-        sony_<frame>.jpg   – Sony frames with detected corners drawn
-        zed_<frame>.jpg    – ZED frames with detected corners drawn
-        detection_summary.json – per-frame detection counts
+Outputs:
+    data/json_output/<dataset>/detections.json.gz        full detections (input to later steps)
+    data/json_output/<dataset>/detection_summary.json    counts per category
+    data/plots/<dataset>/spatial/detection_timeline.png  corners and still frames over time
 
 Usage:
-    docker compose run --rm align python3 spatial_alignment/inspect_detections.py --dataset <name>
+    python3 spatial_alignment/inspect_detections.py --dataset <name> [--workers 8]
+        [--still-sony <px>] [--still-zed <px>]
 """
 
 import argparse
-import json
 import os
-import glob
-import shutil
 import sys
+import time
+from concurrent.futures import ProcessPoolExecutor
+
 import cv2
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 
-BOARD_COLS = 11
-BOARD_ROWS = 8
-SQUARE_LENGTH = 0.028
-MARKER_LENGTH = 0.021
-ARUCO_DICT_ID = cv2.aruco.DICT_4X4_50
-LEGACY_PATTERN = True
-MIN_CORNERS = 45  # The strict threshold we established
+import calib_common as cc
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_DETECTOR = None
 
 
-def build_paths(dataset: str) -> dict:
-    return {
-        "sony_raw": os.path.join(BASE_DIR, "data", "synced", dataset, "sony_rgb"),
-        "zed_raw": os.path.join(BASE_DIR, "data", "synced", dataset, "zed_rgb"),
-        "sony_pass": os.path.join(BASE_DIR, "data", "inspected", dataset, "sony_rgb"),
-        "zed_pass": os.path.join(BASE_DIR, "data", "inspected", dataset, "zed_rgb"),
-        "plots_out": os.path.join(
-            BASE_DIR, "data", "plots", dataset, "spatial", "detection_check"
-        ),
-        "json_out": os.path.join(BASE_DIR, "data", "json_output", dataset),
-    }
+def _init_worker():
+    global _DETECTOR
+    cv2.setNumThreads(1)
+    _DETECTOR = cc.create_detector()
 
 
-def create_board():
-    dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT_ID)
-    board = cv2.aruco.CharucoBoard(
-        size=(BOARD_COLS, BOARD_ROWS),
-        squareLength=SQUARE_LENGTH,
-        markerLength=MARKER_LENGTH,
-        dictionary=dictionary,
-    )
-    board.setLegacyPattern(LEGACY_PATTERN)
-    return board, dictionary
+def _detect_pair(job):
+    """Detects the board in the Sony and ZED images of one synced frame."""
+    name, sony_path, zed_path = job
+    sony, sony_size = cc.detect_image(_DETECTOR, sony_path)
+    zed, zed_size = cc.detect_image(_DETECTOR, zed_path)
+    return name, sony, zed, sony_size, zed_size
 
 
-def annotate_frame(
-    image_path: str, board, dictionary, output_path: str, try_both_legacy: bool = False
-) -> dict:
-    """YOUR EXACT PLOTTING LOGIC - UPDATED ONLY WITH MIN_CORNERS THRESHOLD"""
-    img = cv2.imread(image_path)
-    if img is None:
-        return {
-            "file": os.path.basename(image_path),
-            "status": "unreadable",
-            "n_corners": 0,
-        }
-
-    gray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-
-    if try_both_legacy:
-        best_corners, best_ids, best_markers_c, best_markers_i, best_count = (
-            None,
-            None,
-            None,
-            None,
-            0,
+def plot_timeline(frames, plots_dir):
+    names = sorted(frames)
+    idx = np.array([cc.frame_index(n) for n in names])
+    fig, axes = plt.subplots(2, 1, figsize=(16, 7), sharex=True)
+    for ax, cam, label in zip(axes, cc.CAMERAS, ("Sony", "ZED")):
+        counts = np.array(
+            [len(frames[n][cam]["ids"]) if frames[n][cam] else 0 for n in names]
         )
-        for legacy in [True, False]:
-            b = cv2.aruco.CharucoBoard(
-                size=(BOARD_COLS, BOARD_ROWS),
-                squareLength=SQUARE_LENGTH,
-                markerLength=MARKER_LENGTH,
-                dictionary=dictionary,
-            )
-            b.setLegacyPattern(legacy)
-            det = cv2.aruco.CharucoDetector(b)
-            cc, ci, mc, mi = det.detectBoard(gray)
-            n = len(cc) if cc is not None else 0
-            if n > best_count:
-                best_count, best_corners, best_ids = n, cc, ci
-                best_markers_c, best_markers_i = mc, mi
-        charuco_corners, charuco_ids = best_corners, best_ids
-        marker_corners, marker_ids = best_markers_c, best_markers_i
-    else:
-        detector = cv2.aruco.CharucoDetector(board)
-        charuco_corners, charuco_ids, marker_corners, marker_ids = detector.detectBoard(
-            gray
+        usable = np.array([frames[n]["usable"][cam] for n in names])
+        still = np.array([frames[n]["still"][cam] for n in names])
+        ax.plot(idx, counts, color="#9E9E9E", linewidth=0.6, label="Detected corners")
+        ax.scatter(
+            idx[usable & ~still],
+            counts[usable & ~still],
+            s=3,
+            color="#FF9800",
+            label="Usable, moving",
         )
-
-    if marker_ids is None or len(marker_ids) < 4:
-        cv2.putText(
-            img,
-            "REJECTED - no ArUco markers",
-            (20, 50),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.2,
-            (0, 0, 220),
-            3,
+        ax.scatter(
+            idx[usable & still],
+            counts[usable & still],
+            s=3,
+            color="#2E7D32",
+            label="Usable and still",
         )
-        cv2.imwrite(output_path, img)
-        return {
-            "file": os.path.basename(image_path),
-            "status": "rejected_no_markers",
-            "n_markers": 0,
-            "n_corners": 0,
-        }
-
-    cv2.aruco.drawDetectedMarkers(img, marker_corners, marker_ids)
-
-    n_corners = 0
-    status = "rejected_few_corners"
-
-    # STRICT 45 CORNER CHECK
-    if charuco_corners is not None and len(charuco_corners) >= MIN_CORNERS:
-        n_corners = len(charuco_corners)
-        status = "ok"
-        for pt in charuco_corners.reshape(-1, 2):
-            cv2.circle(img, (int(pt[0]), int(pt[1])), 6, (0, 200, 0), -1)
-    elif charuco_corners is not None:
-        n_corners = len(charuco_corners)
-
-    color = (0, 180, 0) if status == "ok" else (0, 0, 220)
-    label = f"Corners: {n_corners}  Status: {status}"
-    cv2.rectangle(img, (0, 0), (700, 60), (0, 0, 0), -1)
-    cv2.putText(img, label, (10, 42), cv2.FONT_HERSHEY_SIMPLEX, 1.1, color, 2)
-
-    h, w = img.shape[:2]
-    if w > 1280:
-        scale = 1280 / w
-        img = cv2.resize(img, (int(w * scale), int(h * scale)))
-
-    cv2.imwrite(output_path, img)
-
-    return {
-        "file": os.path.basename(image_path),
-        "status": status,
-        "n_markers": len(marker_ids) if marker_ids is not None else 0,
-        "n_corners": n_corners,
-    }
+        ax.axhline(
+            cc.MIN_CORNERS_VIEW,
+            color="#C62828",
+            linestyle="--",
+            linewidth=1,
+            label="Minimum corners",
+        )
+        ax.set_ylabel(f"{label} corners")
+        ax.grid(alpha=0.3)
+        ax.legend(loc="upper right", fontsize=8)
+    axes[1].set_xlabel("Synced frame index")
+    fig.suptitle("ChArUco detection over the recording", fontweight="bold")
+    plt.tight_layout()
+    out = os.path.join(plots_dir, "detection_timeline.png")
+    plt.savefig(out, dpi=130)
+    plt.close()
+    return out
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Detect the ChArUco board in all synced frames."
+    )
     parser.add_argument("--dataset", required=True)
+    parser.add_argument(
+        "--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1)
+    )
+    parser.add_argument(
+        "--still-sony",
+        type=float,
+        default=None,
+        help=f"Sony stillness threshold in pixels (default {cc.STILL_THRESHOLD_PX['sony']}).",
+    )
+    parser.add_argument(
+        "--still-zed",
+        type=float,
+        default=None,
+        help=f"ZED stillness threshold in pixels (default {cc.STILL_THRESHOLD_PX['zed']}).",
+    )
     args = parser.parse_args()
 
-    paths = build_paths(args.dataset)
-    for p in [
-        paths["sony_pass"],
-        paths["zed_pass"],
-        paths["plots_out"],
-        paths["json_out"],
-    ]:
-        os.makedirs(p, exist_ok=True)
-    for p in [paths["sony_pass"], paths["zed_pass"], paths["plots_out"]]:
-        for f in glob.glob(os.path.join(p, "*")):
-            os.remove(f)
+    p = cc.paths(args.dataset)
+    sony_names = set(cc.frame_names(p["synced_sony"]))
+    zed_names = set(cc.frame_names(p["synced_zed"]))
+    names = sorted(sony_names & zed_names)
+    if not names:
+        raise SystemExit(
+            f"[ERROR] No synced frame pairs in {p['synced']}. Run the temporal pipeline first."
+        )
+    unpaired = len(sony_names ^ zed_names)
+    if unpaired:
+        print(
+            f"[WARN] {unpaired} frames exist in only one camera folder and are ignored."
+        )
 
-    board, dictionary = create_board()
-    files = sorted(
-        [f for f in os.listdir(paths["sony_raw"]) if f.lower().endswith(".png")]
+    print(f"\n{'=' * 60}\n  Detection - dataset: {args.dataset}")
+    print(f"  {len(names)} synced pairs, {args.workers} workers\n{'=' * 60}\n")
+
+    jobs = [
+        (
+            n,
+            os.path.join(p["synced_sony"], n + ".png"),
+            os.path.join(p["synced_zed"], n + ".png"),
+        )
+        for n in names
+    ]
+    frames = {}
+    sizes = {"sony": set(), "zed": set()}
+    t0 = time.time()
+    with ProcessPoolExecutor(
+        max_workers=args.workers, initializer=_init_worker
+    ) as pool:
+        for k, (name, sony, zed, sony_size, zed_size) in enumerate(
+            pool.map(_detect_pair, jobs, chunksize=8)
+        ):
+            frames[name] = {"sony": sony, "zed": zed}
+            if sony_size:
+                sizes["sony"].add(sony_size)
+            if zed_size:
+                sizes["zed"].add(zed_size)
+            if (k + 1) % 500 == 0:
+                print(f"  {k + 1}/{len(jobs)} frames ({time.time() - t0:.0f} s)")
+
+    for cam in cc.CAMERAS:
+        if len(sizes[cam]) != 1:
+            raise SystemExit(
+                f"[ERROR] {cam} frames have inconsistent or unreadable sizes: {sizes[cam]}"
+            )
+    image_size = {cam: list(next(iter(sizes[cam]))) for cam in cc.CAMERAS}
+
+    # Quality and stillness flags.
+    corners_3d = cc.board_corners_3d()
+    by_index = {cc.frame_index(n): frames[n] for n in names}
+    for name in names:
+        entry = frames[name]
+        entry["usable"] = {
+            cam: bool(
+                entry[cam] is not None
+                and cc.view_is_usable(entry[cam]["ids"], corners_3d)
+            )
+            for cam in cc.CAMERAS
+        }
+    thresholds = dict(cc.STILL_THRESHOLD_PX)
+    if args.still_sony is not None:
+        thresholds["sony"] = args.still_sony
+    if args.still_zed is not None:
+        thresholds["zed"] = args.still_zed
+    for name in names:
+        entry = frames[name]
+        idx = cc.frame_index(name)
+        entry["motion_px"] = {
+            cam: (
+                cc.frame_motion_px(by_index, idx, cam) if entry["usable"][cam] else None
+            )
+            for cam in cc.CAMERAS
+        }
+        entry["still"] = {
+            cam: bool(
+                entry["usable"][cam]
+                and cc.is_still(entry["motion_px"][cam], cam, thresholds[cam])
+            )
+            for cam in cc.CAMERAS
+        }
+
+    summary = {
+        "dataset": args.dataset,
+        "n_frames": len(names),
+        "image_size": image_size,
+        "per_camera": {},
+    }
+    for cam in cc.CAMERAS:
+        motion = np.array(
+            [
+                frames[n]["motion_px"][cam]
+                for n in names
+                if frames[n]["motion_px"][cam] is not None
+            ]
+        )
+        summary["per_camera"][cam] = {
+            "detected": sum(1 for n in names if frames[n][cam] is not None),
+            "usable": sum(1 for n in names if frames[n]["usable"][cam]),
+            "usable_and_still": sum(1 for n in names if frames[n]["still"][cam]),
+            "motion_px_percentiles": (
+                {
+                    str(q): float(np.percentile(motion, q))
+                    for q in (5, 10, 25, 50, 75, 90)
+                }
+                if len(motion)
+                else {}
+            ),
+        }
+    summary["pairs_usable_and_still"] = sum(
+        1 for n in names if all(frames[n]["still"][c] for c in cc.CAMERAS)
+    )
+    summary["rules"] = {
+        "min_corners": cc.MIN_CORNERS_VIEW,
+        "min_board_coverage": cc.MIN_BOARD_COVERAGE,
+        "still_offset_frames": cc.STILL_OFFSET,
+        "still_threshold_px": thresholds,
+        "still_statistic": "median corner displacement, larger of the two neighbours",
+    }
+
+    cc.save_json(
+        p["detections"],
+        {
+            "meta": {
+                "dataset": args.dataset,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "opencv_version": cv2.__version__,
+                "board": {
+                    "cols": cc.BOARD_COLS,
+                    "rows": cc.BOARD_ROWS,
+                    "square_m": cc.SQUARE_LENGTH,
+                    "marker_m": cc.MARKER_LENGTH,
+                    "legacy_pattern": cc.LEGACY_PATTERN,
+                },
+                "image_size": image_size,
+            },
+            "frames": frames,
+        },
+    )
+    cc.save_json(p["detection_summary"], summary)
+    os.makedirs(p["plots"], exist_ok=True)
+    timeline = plot_timeline(frames, p["plots"])
+
+    for cam in cc.CAMERAS:
+        s = summary["per_camera"][cam]
+        print(
+            f"  {cam.upper():5s} detected {s['detected']:6d} | usable {s['usable']:6d} | "
+            f"usable and still {s['usable_and_still']:6d}   (image {image_size[cam][0]} x {image_size[cam][1]})"
+        )
+    print(
+        f"  Pairs usable and still in both cameras: {summary['pairs_usable_and_still']}"
     )
 
-    print(f"\n{'='*60}")
-    print(f"  Filtering {len(files)} pairs. Strict Threshold: {MIN_CORNERS}+ Corners")
-    print(f"  Generating plots in data/plots/{args.dataset}/spatial/detection_check/")
-    print(f"{'='*60}\n")
-
-    summary = {"sony": [], "zed": []}
-    passed_count = 0
-
-    for i, fname in enumerate(files):
-        sony_in = os.path.join(paths["sony_raw"], fname)
-        zed_in = os.path.join(paths["zed_raw"], fname)
-        if not os.path.exists(zed_in):
-            continue
-
-        sony_plot = os.path.join(
-            paths["plots_out"], f"sony_{fname.replace('.png', '.jpg')}"
-        )
-        zed_plot = os.path.join(
-            paths["plots_out"], f"zed_{fname.replace('.png', '.jpg')}"
-        )
-
-        res_s = annotate_frame(
-            sony_in, board, dictionary, sony_plot, try_both_legacy=False
-        )
-        res_z = annotate_frame(
-            zed_in, board, dictionary, zed_plot, try_both_legacy=True
-        )
-
-        summary["sony"].append(res_s)
-        summary["zed"].append(res_z)
-
-        if res_s["status"] == "ok" and res_z["status"] == "ok":
-            shutil.copy2(sony_in, os.path.join(paths["sony_pass"], fname))
-            shutil.copy2(zed_in, os.path.join(paths["zed_pass"], fname))
-            passed_count += 1
-            sym = "✓"
-        else:
-            sym = "✗"
-
-        if (i + 1) % 100 == 0 or sym == "✓":
+    print(
+        "\n  Board motion between frames 3 apart (median corner displacement, pixels):"
+    )
+    print(
+        f"  {'':6s}{'threshold':>10s}{'p5':>8s}{'p10':>8s}{'p25':>8s}{'p50':>8s}{'p75':>8s}{'p90':>8s}"
+    )
+    for cam in cc.CAMERAS:
+        pc = summary["per_camera"][cam]["motion_px_percentiles"]
+        if pc:
             print(
-                f"  {sym} {fname:15s} | SONY: {res_s['n_corners']:2d} | ZED: {res_z['n_corners']:2d}"
+                f"  {cam.upper():6s}{thresholds[cam]:10.2f}"
+                + "".join(f"{pc[str(q)]:8.2f}" for q in (5, 10, 25, 50, 75, 90))
             )
-
-    report_path = os.path.join(paths["json_out"], "detection_summary.json")
-    with open(report_path, "w") as f:
-        json.dump(summary, f, indent=2)
-
-    print(f"\n[SUCCESS] {passed_count} high-quality frames moved to data/inspected/\n")
+    n_sony = summary["per_camera"]["sony"]["usable_and_still"]
+    n_zed = summary["per_camera"]["zed"]["usable_and_still"]
+    if n_sony >= 20 and n_zed < 0.5 * n_sony:
+        print(
+            f"\n  [WARN] The ZED has far fewer still frames ({n_zed}) than the Sony ({n_sony}) although both see the\n"
+            "         same board on a rigid rig. The ZED corner positions are probably noisier than the threshold\n"
+            "         allows. Compare the ZED percentiles above with the Sony ones and raise --still-zed if the ZED\n"
+            "         noise floor (p5-p10) is close to its threshold."
+        )
+    print(
+        f"\n  Saved: {p['detections']}\n  Saved: {p['detection_summary']}\n  Saved: {timeline}\n"
+    )
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

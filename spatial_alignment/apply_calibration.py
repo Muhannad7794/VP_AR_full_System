@@ -1,148 +1,136 @@
 """
 apply_calibration.py
 ====================
-Runtime utility for the VP_AR_full_System spatial alignment pipeline.
+Step 6 of the spatial alignment pipeline.
 
-Reads spatial_calibration.json and transforms a ZED camera-space 3-D point
-(e.g., a skeleton joint position) into Sony camera space.
+Prints the deployable values from spatial_calibration.json (runtime solution):
 
-This script can be run in two modes:
+--ue5     Values for the Custom node of M_ZED_DepthReproject and the lens
+          offset of BP_TrackerAnchor.
+--point   Transforms one ZED camera-space point (metres, OpenCV axes) into
+          Sony camera space.
 
-1. SINGLE POINT MODE – supply X Y Z in metres to transform one point:
-       python3 spatial_alignment/apply_calibration.py \\
-           --dataset <name> --point 0.1 -0.05 1.5
+Lens offset convention
+----------------------
+The location is the Sony optical centre relative to the ZED left optical
+centre, and the rotation turns the ZED's viewing direction into the Sony's,
+both in the ZED's local Unreal axes (X forward, Y right, Z up; centimetres,
+degrees). It is computed as -R^T @ T mapped from OpenCV axes (x right,
+y down, z forward) to Unreal axes. T itself is the ZED origin seen from the
+Sony and is not the lens offset.
 
-2. UE5 OFFSET MODE – print the ready-to-use LensOffset values
-   for the BP_TrackerAnchor blueprint:
-       python3 spatial_alignment/apply_calibration.py \\
-           --dataset <name> --ue5
-
-The values printed by --ue5 are the X/Y/Z cm values to enter into the
-LensOffset → Location field in the BP_TrackerAnchor Details panel in UE5.
+Usage:
+    python3 spatial_alignment/apply_calibration.py --dataset <name> --ue5
+    python3 spatial_alignment/apply_calibration.py --dataset <name> --point 0.1 -0.05 1.5
 """
 
 import argparse
-import json
-import os
 import sys
 
 import numpy as np
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import calib_common as cc
 
 
-def load_calibration(dataset: str) -> dict:
-    path = os.path.join(
-        BASE_DIR, "data", "json_output", dataset, "spatial_calibration.json"
+def fmt_vec(v, digits=6):
+    return "(" + ", ".join(f"{x:.{digits}f}" for x in v) + ")"
+
+
+def print_ue5(cal):
+    rt = cal["runtime"]
+    report = None
+    try:
+        report = cc.load_json(cc.paths(cal["meta"]["dataset"])["validation"])
+    except SystemExit:
+        pass
+
+    print("\n" + "=" * 64)
+    print("  M_ZED_DepthReproject - Custom node inputs")
+    print("=" * 64)
+    print(f"  Sony_FX  {rt['Sony_FX']:.4f}")
+    print(f"  Sony_FY  {rt['Sony_FY']:.4f}")
+    print(f"  Sony_CX  {rt['Sony_CX']:.4f}")
+    print(f"  Sony_CY  {rt['Sony_CY']:.4f}")
+    print(f"  ZED_FX   {rt['ZED_FX']:.4f}")
+    print(f"  ZED_FY   {rt['ZED_FY']:.4f}")
+    print(f"  ZED_CX   {rt['ZED_CX']:.4f}")
+    print(f"  ZED_CY   {rt['ZED_CY']:.4f}")
+    print(f"  R_Row0   {fmt_vec(rt['R_Row0'])}")
+    print(f"  R_Row1   {fmt_vec(rt['R_Row1'])}")
+    print(f"  R_Row2   {fmt_vec(rt['R_Row2'])}")
+    print(f"  T_Metres {fmt_vec(rt['T_Metres'])}")
+    print(f"  ImageWidth {rt['ImageWidth']}   ImageHeight {rt['ImageHeight']}")
+    d = rt.get("Sony_Distortion_k1_k2_p1_p2_k3")
+    if d and any(abs(v) > 0 for v in d):
+        print(
+            f"  Sony lens distortion (k1, k2, p1, p2, k3), not used by the pinhole shader: {fmt_vec(d, 5)}"
+        )
+
+    loc = rt["lens_offset_location_cm"]
+    rot = rt["lens_offset_rotation_deg"]
+    print("\n" + "=" * 64)
+    print("  BP_TrackerAnchor - Lens Offset")
+    print("=" * 64)
+    print(
+        f"  Location  X {loc['X']:+.3f} cm   Y {loc['Y']:+.3f} cm   Z {loc['Z']:+.3f} cm"
     )
-    if not os.path.isfile(path):
-        print(f"[ERROR] Calibration not found: {path}")
-        print("        Run stereo_calibrate.py first.")
-        sys.exit(1)
-    with open(path) as f:
-        return json.load(f)
+    print(
+        f"  Rotation  Pitch {rot['Pitch']:+.3f} deg   Yaw {rot['Yaw']:+.3f} deg   Roll {rot['Roll']:+.3f} deg"
+    )
+    print(f"  Convention: {rt['lens_offset_convention']}")
 
-
-def transform_point(point_zed: np.ndarray, R: np.ndarray, T: np.ndarray) -> np.ndarray:
-    """
-    Transform a single 3-D point from ZED camera space to Sony camera space.
-
-    Parameters
-    ----------
-    point_zed : (3,) array, coordinates in metres
-    R         : (3,3) rotation matrix  (extrinsics ZED→Sony)
-    T         : (3,1) translation vector (extrinsics ZED→Sony)
-
-    Returns
-    -------
-    point_sony : (3,) array, coordinates in metres in Sony space
-    """
-    return (R @ point_zed.reshape(3, 1) + T).flatten()
-
-
-def print_ue5_offset(cal: dict):
-    """
-    Print the three LensOffset cm values suitable for direct entry into
-    the BP_TrackerAnchor Details panel in UE5.
-    """
-    ue5 = cal["ue5_offset"]
-    print("\n" + "=" * 60)
-    print("  UE5 BP_TrackerAnchor – LensOffset values")
-    print("=" * 60)
-    print(f"  Location X : {ue5['X_cm']:+.3f} cm")
-    print(f"  Location Y : {ue5['Y_cm']:+.3f} cm")
-    print(f"  Location Z : {ue5['Z_cm']:+.3f} cm")
-    print("=" * 60)
-    print("\n  Enter these values in:")
-    print("  Details panel → Default → Lens Offset → Location")
-    print("  on the BP_TrackerAnchor instance in your level.\n")
-
-    rod_deg = cal["extrinsics"]["rotation_degrees"]
-    print("  Rotation offset (for reference only):")
-    print(f"  Roll  (X) : {rod_deg[0]:+.3f}°")
-    print(f"  Pitch (Y) : {rod_deg[1]:+.3f}°")
-    print(f"  Yaw   (Z) : {rod_deg[2]:+.3f}°")
-    print()
-    print("  Note: For small physical offsets between ZED and Sony")
-    print("  (shoe-mount separation of a few cm), rotation is usually")
-    print("  negligible and only Location needs to be applied.")
-    print()
+    unc = cal.get("uncertainty", {}).get("bootstrap")
+    if unc:
+        s = unc["translation_std_mm"]
+        print(
+            f"\n  Uncertainty (bootstrap): T {s[0]:.1f} / {s[1]:.1f} / {s[2]:.1f} mm, R {unc['rotation_std_deg']:.3f} deg"
+            f"\n  (pair noise only; intrinsic bias is assessed by the held-out validation)"
+        )
+    if report:
+        print(f"  Validation assessment  : {report['assessment']}")
+    print(
+        "\n  The ZED values are the SDK rectified intrinsics. The Sony values are the\n"
+        "  calibrated camera matrix without lens distortion; the displacement this\n"
+        "  omits is reported in sony_intrinsics.json (runtime_vs_physical_displacement)\n"
+        "  and in error_across_sony_frame.png.\n"
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Apply spatial calibration to ZED 3-D points or "
-        "print UE5 offset values."
-    )
+    parser = argparse.ArgumentParser(description="Print deployable calibration values.")
+    parser.add_argument("--dataset", required=True)
     parser.add_argument(
-        "--dataset", required=True, help="Dataset name matching the calibration JSON."
+        "--ue5", action="store_true", help="Print the Unreal Engine values."
     )
     parser.add_argument(
         "--point",
         nargs=3,
         type=float,
         metavar=("X", "Y", "Z"),
-        help="Transform a single point given in metres " "in ZED camera space.",
+        help="ZED-space point in metres.",
     )
-    parser.add_argument(
-        "--ue5",
-        action="store_true",
-        help="Print the ready-to-use UE5 LensOffset values.",
-    )
-
     args = parser.parse_args()
 
-    cal = load_calibration(args.dataset)
-    R = np.array(cal["extrinsics"]["rotation_matrix_3x3"])
-    T = np.array(cal["extrinsics"]["translation_metres"]).reshape(3, 1)
+    cal = cc.load_json(cc.paths(args.dataset)["calibration"], "stereo_calibrate.py")
+    R = np.asarray(cal["extrinsics"]["rotation_matrix_3x3"])
+    T = np.asarray(cal["extrinsics"]["translation_metres"]).reshape(3)
 
-    print(f"\n[INFO] Calibration loaded – dataset: {args.dataset}")
+    print(f"\n[INFO] Calibration loaded - dataset: {args.dataset}")
     print(
-        f"       Stereo RMS: {cal['extrinsics']['stereo_rms_px']:.4f} px  "
-        f"({cal['meta']['valid_pairs_used']} pairs used)"
+        f"       Stereo RMS {cal['extrinsics']['stereo_rms_px']:.4f} px "
+        f"({cal['meta']['valid_pairs_used']} pairs), ZED intrinsics from {cal['meta']['zed_intrinsics_source']}"
     )
 
     if args.ue5:
-        print_ue5_offset(cal)
-
+        print_ue5(cal)
     if args.point:
-        pt_zed = np.array(args.point, dtype=float)
-        pt_sony = transform_point(pt_zed, R, T)
-        print(
-            f"\n  Input  (ZED  space, metres): "
-            f"X={pt_zed[0]:+.4f}  Y={pt_zed[1]:+.4f}  Z={pt_zed[2]:+.4f}"
-        )
-        print(
-            f"  Output (Sony space, metres): "
-            f"X={pt_sony[0]:+.4f}  Y={pt_sony[1]:+.4f}  "
-            f"Z={pt_sony[2]:+.4f}\n"
-        )
-
+        pt = np.array(args.point, dtype=float)
+        out = R @ pt + T
+        print(f"\n  ZED  (m): X={pt[0]:+.4f}  Y={pt[1]:+.4f}  Z={pt[2]:+.4f}")
+        print(f"  Sony (m): X={out[0]:+.4f}  Y={out[1]:+.4f}  Z={out[2]:+.4f}\n")
     if not args.ue5 and not args.point:
         parser.print_help()
-        print("\n[HINT] Use --ue5 to print the UE5 LensOffset values, or")
-        print("       --point X Y Z to transform a specific 3-D point.\n")
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
