@@ -249,6 +249,9 @@ def main():
         f"  Sony K ({model_p}): fx {K_s[0, 0]:.3f} fy {K_s[1, 1]:.3f} cx {K_s[0, 2]:.3f} cy {K_s[1, 2]:.3f}"
     )
     print(f"  Sony distortion       : {np.round(D_s, 5).tolist()}")
+    print(
+        f"  Board square length   : {cc.SQUARE_LENGTH * 1000:.3f} mm (sets the metric scale of T)"
+    )
     print(f"  Calibration pairs     : {len(names)}\n")
 
     sol = run_solution(
@@ -323,6 +326,7 @@ def main():
             "valid_pairs_used": len(sol["names"]),
             "convention": "X_sony = R @ X_zed + T (OpenCV camera frames, metres)",
         },
+        "board": cc.board_definition(),
         "zed_camera": {
             "camera_matrix": K_z.tolist(),
             "distortion_coeffs": D_z.tolist(),

@@ -42,12 +42,92 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # Board definition (calib.io ChArUco board)
 # ---------------------------------------------------------------------------
+# The square length is the single metric scale of the whole calibration: every
+# board pose, the ZED-to-Sony translation and the comparison against the ZED
+# SDK depth inherit it. It must be the MEASURED size of the printed board, not
+# the nominal size of the design file, because printers commonly scale a page
+# by one to a few percent.
+#
+# Measurement of the board used for dataset_05: 312 mm across all 11 squares
+# of one row (outer edge of the first square to the outer edge of the last),
+# i.e. 28.36 mm per square, against the nominal 28 mm (print scale 1.013).
+# A single square measured on its own gave about 28.4 mm, which agrees.
+#
+# Override for another board without editing this file:
+#     VP_BOARD_SQUARE_MM=<measured square length in mm>
+# (run_spatial.sh sets it with --square-mm). The marker length follows from
+# the design ratio, because a print scales markers and squares together.
 BOARD_COLS = 11  # squares horizontally
 BOARD_ROWS = 8  # squares vertically
-SQUARE_LENGTH = 0.028  # metres
-MARKER_LENGTH = 0.021  # metres
+NOMINAL_SQUARE_MM = 28.0  # design value of the board file
+MEASURED_SQUARE_MM = 28.36  # 312 mm / 11 squares, see above
+MARKER_TO_SQUARE_RATIO = 21.0 / 28.0  # design ratio (21 mm markers in 28 mm squares)
+SQUARE_MM_ENV = "VP_BOARD_SQUARE_MM"
+
+
+def _square_length_m():
+    value = os.environ.get(SQUARE_MM_ENV, "").strip()
+    if not value:
+        return MEASURED_SQUARE_MM / 1000.0
+    try:
+        mm = float(value)
+    except ValueError:
+        raise SystemExit(
+            f"[ERROR] {SQUARE_MM_ENV}='{value}' is not a number (square length in mm)."
+        )
+    if not 5.0 <= mm <= 200.0:
+        raise SystemExit(
+            f"[ERROR] {SQUARE_MM_ENV}={mm} mm is outside the plausible range 5-200 mm."
+        )
+    return mm / 1000.0
+
+
+SQUARE_LENGTH = _square_length_m()  # metres
+MARKER_LENGTH = SQUARE_LENGTH * MARKER_TO_SQUARE_RATIO  # metres
 ARUCO_DICT_ID = cv2.aruco.DICT_4X4_50
 LEGACY_PATTERN = True  # property of the printed board, identical for both cameras
+
+# Two board definitions are treated as the same board when their square
+# lengths differ by less than this fraction.
+BOARD_SCALE_TOLERANCE = 1e-4
+
+
+def board_definition():
+    """Board parameters written into every output that depends on the board
+    scale, so a later step can detect outputs made with a different scale."""
+    return {
+        "cols": BOARD_COLS,
+        "rows": BOARD_ROWS,
+        "square_length_m": SQUARE_LENGTH,
+        "marker_length_m": MARKER_LENGTH,
+        "square_length_source": (
+            f"environment variable {SQUARE_MM_ENV}"
+            if os.environ.get(SQUARE_MM_ENV, "").strip()
+            else "MEASURED_SQUARE_MM in calib_common.py"
+        ),
+        "aruco_dictionary": "DICT_4X4_50",
+        "legacy_pattern": LEGACY_PATTERN,
+    }
+
+
+def check_board_matches(recorded, producer):
+    """Stops with an explanation when an output was produced with a different
+    board scale than the current definition. recorded is the 'board' entry of
+    that output (None for outputs written before the entry existed)."""
+    if recorded is None:
+        raise SystemExit(
+            f"[ERROR] The output of {producer} does not record the board size it was made with "
+            f"(written by an older pipeline version). Re-run the spatial pipeline from step 2:\n"
+            f"        ./run_spatial.sh <dataset> --sony-model pinhole --from-step 2"
+        )
+    old = float(recorded["square_length_m"])
+    if abs(old - SQUARE_LENGTH) > BOARD_SCALE_TOLERANCE * SQUARE_LENGTH:
+        raise SystemExit(
+            f"[ERROR] {producer} used a board square of {old * 1000:.3f} mm, the current definition is "
+            f"{SQUARE_LENGTH * 1000:.3f} mm. Every metric distance depends on this value, so the outputs "
+            f"cannot be mixed. Re-run the spatial pipeline from step 2."
+        )
+
 
 # Area spanned by all inner corners on the board plane (square metres).
 FULL_INNER_AREA = (BOARD_COLS - 2) * (BOARD_ROWS - 2) * SQUARE_LENGTH**2
@@ -112,11 +192,32 @@ MIN_INV_Z_SPAN = 0.25  # 1/m, e.g. 1.0 m to 1.33 m
 MIN_TILT_DEG = 20.0
 
 # ---------------------------------------------------------------------------
-# Validation grading (corner transfer error on held-out pairs, pixels)
+# Validation grading
 # ---------------------------------------------------------------------------
-GRADE_EXCELLENT_PX = 0.5
+# The held-out corner transfer error contains two parts:
+#   floor   what the Sony detections and the Sony lens model cannot explain
+#           even with a perfect calibration. Measured per pair by fitting the
+#           board pose to the Sony corners alone (six free parameters).
+#   excess  what the ZED-to-Sony chain adds on top: extrinsic error plus the
+#           error of the board pose seen by the ZED.
+# Independent errors add in squares, so excess = sqrt(transfer^2 - floor^2).
+# The grade is given on the excess, because only the excess can be improved by
+# a better extrinsic calibration; the floor belongs to the Sony camera and its
+# lens model. Thresholds in Sony pixels (1 px at fx 1358 is 0.04 degrees, or
+# 0.7 mm at 1 m):
+GRADE_EXCELLENT_PX = 0.5  # below the localisation noise of a single corner
 GRADE_GOOD_PX = 1.0
 GRADE_ACCEPTABLE_PX = 2.0
+
+# Scale consistency between the ZED SDK depth and the board geometry. The
+# ratio of SDK depth to board-pose depth is expected within this fraction of
+# 1.0; beyond it either the board square length or the ZED depth scale is
+# wrong, and the end-to-end path shows a distance-dependent bias.
+SCALE_TOLERANCE = 0.005
+
+# A systematic end-to-end offset (mean over a distance bin) above this value
+# is visible as a consistent shift of occlusion edges in the composite.
+RUNTIME_BIAS_WARN_PX = 1.0
 
 # Distance bins (metres) used for every error-versus-distance report.
 DISTANCE_BINS_M = [0.0, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 100.0]
@@ -513,14 +614,23 @@ def distance_bin_label(z):
     return "out of range"
 
 
-def grade(test_rms_px):
-    if not np.isfinite(test_rms_px):
+def excess_over_floor(total_rms_px, floor_rms_px):
+    """Part of an RMS error not explained by the floor, assuming independent
+    errors: sqrt(total^2 - floor^2), and 0 when the total is below the floor."""
+    if not (np.isfinite(total_rms_px) and np.isfinite(floor_rms_px)):
+        return float("nan")
+    return float(math.sqrt(max(0.0, total_rms_px**2 - floor_rms_px**2)))
+
+
+def grade(excess_px):
+    """Grade of the calibration from the held-out excess error (pixels)."""
+    if not np.isfinite(excess_px):
         return "Not available"
-    if test_rms_px < GRADE_EXCELLENT_PX:
+    if excess_px < GRADE_EXCELLENT_PX:
         return "Excellent"
-    if test_rms_px < GRADE_GOOD_PX:
+    if excess_px < GRADE_GOOD_PX:
         return "Good"
-    if test_rms_px < GRADE_ACCEPTABLE_PX:
+    if excess_px < GRADE_ACCEPTABLE_PX:
         return "Acceptable"
     return "Poor"
 

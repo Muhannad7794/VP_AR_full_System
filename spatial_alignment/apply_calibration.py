@@ -88,6 +88,14 @@ def print_ue5(cal):
         )
     if report:
         print(f"  Validation assessment  : {report['assessment']}")
+        scale = report.get("scale_check") or {}
+        if scale.get("available"):
+            print(
+                f"  Scale check            : {scale['verdict']} (ZED depth / board depth "
+                f"{scale['depth_ratio_median']:.4f}, board square {scale['board_square_mm']:.2f} mm)"
+            )
+            if scale["verdict"] != "Consistent":
+                print(f"  [WARN] {scale['note']}")
     print(
         "\n  The ZED values are the SDK rectified intrinsics. The Sony values are the\n"
         "  calibrated camera matrix without lens distortion; the displacement this\n"

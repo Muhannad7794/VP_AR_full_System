@@ -39,6 +39,16 @@ Method
    at verifying the focal length itself. The cross-camera validation in
    validate_calibration.py is the decisive check.
 
+   Focal length and radial distortion can also trade off against each other
+   when the board covers only a small part of the frame: inside a small patch
+   radial distortion looks almost like a change of scale, so a longer focal
+   length combined with a distortion term fits nearly as well as the correct
+   focal length without it. A warning is printed when the selected model's
+   focal length differs from the pinhole fit by more than
+   FOCAL_DISAGREEMENT_WARN. Cameras that correct their lens distortion
+   internally (for example the Sony with Distortion Comp. on Auto) deliver a
+   near-pinhole image; for them the model can be fixed with --model pinhole.
+
 Outputs:
     data/json_output/<dataset>/sony_intrinsics.json
     data/plots/<dataset>/spatial/sony_intrinsics_models.png
@@ -48,6 +58,7 @@ Outputs:
 Usage:
     python3 spatial_alignment/calibrate_sony_intrinsics.py --dataset <name>
         [--max-views 40] [--exclude frames.txt] [--include frames.txt]
+        [--model pinhole|k1|k1_k2|k1_k2_tangential|k1_k2_k3_tangential]
 """
 
 import argparse
@@ -87,6 +98,9 @@ MODELS = [
 SELECTION_TOLERANCE_REL = 0.02
 SELECTION_TOLERANCE_ABS_PX = 0.01
 MIN_CALIBRATION_VIEWS = 8
+# Relative focal-length difference between the selected model and the pinhole
+# fit above which a focal/distortion trade-off is reported.
+FOCAL_DISAGREEMENT_WARN = 0.03
 CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, 1e-9)
 UNDISTORT_CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 50, 1e-10)
 
@@ -225,6 +239,13 @@ def main():
     parser.add_argument(
         "--include", help="Text file with frame names forced into the calibration set."
     )
+    parser.add_argument(
+        "--model",
+        choices=[name for name, _ in MODELS],
+        default=None,
+        help="Use this lens model instead of selecting one on held-out error "
+        "(e.g. pinhole for a camera that corrects its lens distortion internally).",
+    )
     args = parser.parse_args()
 
     p = cc.paths(args.dataset)
@@ -347,7 +368,11 @@ def main():
             f"cy {K[1, 2]:.1f} (+-{std_int[3]:.1f})"
         )
 
-    if test_idx:
+    if args.model:
+        chosen = next(r for r in results if r["model"] == args.model)
+        selection = f"Forced with --model {args.model}."
+    elif test_idx:
+        selection = "Selected on held-out error. Describes the lens."
         best = min(r["test_rms_px"] for r in results)
         limit = best * (1 + SELECTION_TOLERANCE_REL) + SELECTION_TOLERANCE_ABS_PX
         chosen = next(r for r in results if r["test_rms_px"] <= limit)
@@ -356,6 +381,22 @@ def main():
             "No held-out views: the model was chosen on calibration error and is not validated."
         )
         chosen = next(r for r in results if r["model"] == "k1_k2")
+        selection = "Default model (no held-out views)."
+
+    pinhole_fx = next(r for r in results if r["model"] == "pinhole")["camera_matrix"][
+        0
+    ][0]
+    chosen_fx = chosen["camera_matrix"][0][0]
+    focal_ratio = chosen_fx / pinhole_fx
+    if chosen["model"] != "pinhole" and abs(focal_ratio - 1) > FOCAL_DISAGREEMENT_WARN:
+        warnings.append(
+            f"The {chosen['model']} focal length ({chosen_fx:.1f} px) differs from the pinhole fit "
+            f"({pinhole_fx:.1f} px) by {100 * (focal_ratio - 1):+.1f} %. Focal length and distortion are "
+            f"probably trading off (small board in the frame). A focal-length error moves the Sony-ZED "
+            f"translation along the optical axis by about the same fraction of the board distance. Compare "
+            f"with an independent focal estimate, or re-run with --model pinhole and judge by the "
+            f"cross-camera validation."
+        )
 
     K_phys = np.asarray(chosen["camera_matrix"])
     D_phys = np.asarray(chosen["distortion_coeffs"])
@@ -401,13 +442,11 @@ def main():
             "dataset": args.dataset,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "image_size": list(image_size),
+            "board": cc.board_definition(),
             "n_holds": len(holds),
             "calibration_frames": [names[i] for i in calib_idx],
             "test_frames": [names[i] for i in test_idx],
-            "physical": {
-                **chosen,
-                "role": "Selected on held-out error. Describes the lens.",
-            },
+            "physical": {**chosen, "role": selection},
             "runtime": {
                 **runtime,
                 "role": "Physical camera matrix without distortion, for the pinhole Unreal Engine camera and shader.",
@@ -420,7 +459,7 @@ def main():
     )
 
     print(
-        f"\n  Physical model : {chosen['model']}  (held-out {chosen['test_rms_px']:.3f} px)"
+        f"\n  Physical model : {chosen['model']}  (held-out {chosen['test_rms_px']:.3f} px; {selection})"
     )
     print(f"  Runtime model  : {runtime['model']}")
     print(
