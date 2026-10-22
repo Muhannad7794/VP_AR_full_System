@@ -1,16 +1,21 @@
-# Core Math & Time Series 
-numpy==1.24.3
-scipy>=1.10.0,<1.13.0
-pandas==2.0.3
-fastdtw
+# Versions are pinned for a reproducible image (Python 3.10, Ubuntu 22.04).
+# pyzed (ZED SDK 5.x Python API) requires NumPy 2.x, so every package below is
+# a release that supports NumPy 2.
 
-# Computer Vision 
-opencv-contrib-python==4.9.0.80
+# Core Math & Time Series
+numpy==2.2.6
+scipy==1.15.3
+pandas==2.2.3
+fastdtw==0.3.4
 
-# Deep Learning (Required for ResNet50 AI Sync)
-torch>=2.1.0 --extra-index-url https://download.pytorch.org/whl/cu121
-torchvision>=0.16.0 --extra-index-url https://download.pytorch.org/whl/cu121
+# Computer Vision
+opencv-contrib-python==4.10.0.84
+
+# Deep Learning (legacy ResNet18 + FastDTW sync method only).
+# The PyPI wheels bundle their own CUDA 12.x runtime.
+torch==2.7.1
+torchvision==0.22.1
 
 # Visualization
-matplotlib>=3.7.0
-tqdm>=4.65.0
+matplotlib==3.10.3
+tqdm==4.67.1

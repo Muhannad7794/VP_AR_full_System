@@ -1,13 +1,26 @@
+# All services run the same image. It is built once, by the "extract" service
+# (docker compose build), and the other services reuse it by name instead of
+# building and unpacking their own identical copy.
+x-image: &pipeline_image
+  image: vp_ar_full_system:zed5.2
+  pull_policy: never
+
 services:
 
   # Extract frames from raw data
   extract:
     build: .
+    <<: *pipeline_image
     container_name: frames_extraction
     command: tail -f /dev/null
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
       - ./run_extract.sh:/VP_AR_full_System_dockerized/run_extract.sh
+      # Mounted so that changes to the script do not require an image rebuild
+      - ./extract_frames.py:/VP_AR_full_System_dockerized/extract_frames.py
+      # Keeps the optimised NEURAL depth model between runs (otherwise it is
+      # re-optimised in every new container, which takes several minutes)
+      - zed_resources:/usr/local/zed/resources
     deploy:
       resources:
         reservations:
@@ -15,17 +28,17 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-              
+
   # Temporal synchronizer
   sync:
-    build: .
+    <<: *pipeline_image
     container_name: temporal_alignment
-
     command: tail -f /dev/null
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
       - ./temporal_alignment:/VP_AR_full_System_dockerized/temporal_alignment
       - ./run_temporal.sh:/VP_AR_full_System_dockerized/run_temporal.sh
+      - zed_resources:/usr/local/zed/resources
     deploy:
       resources:
         reservations:
@@ -36,13 +49,14 @@ services:
 
   # Spatial calibrator
   align:
-    build: .
+    <<: *pipeline_image
     container_name: spatial_alignment
     command: tail -f /dev/null
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
       - ./spatial_alignment:/VP_AR_full_System_dockerized/spatial_alignment
       - ./run_spatial.sh:/VP_AR_full_System_dockerized/run_spatial.sh
+      - zed_resources:/usr/local/zed/resources
     deploy:
       resources:
         reservations:
@@ -51,32 +65,34 @@ services:
               count: all
               capabilities: [gpu]
 
-# Kinematic extractor and 1 Euro filtering pipeline
+  # Kinematic extractor and 1 Euro filtering pipeline
   filter:
-      build: .
-      container_name: skeleton_filtering
-      command: tail -f /dev/null
-      volumes:
-        - ./data:/VP_AR_full_System_dockerized/data
-        - ./skeleton_filtering:/VP_AR_full_System_dockerized/skeleton_filtering
-        - ./run_filtering.sh:/VP_AR_full_System_dockerized/run_filtering.sh
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: all
-                capabilities: [gpu]
+    <<: *pipeline_image
+    container_name: skeleton_filtering
+    command: tail -f /dev/null
+    volumes:
+      - ./data:/VP_AR_full_System_dockerized/data
+      - ./skeleton_filtering:/VP_AR_full_System_dockerized/skeleton_filtering
+      - ./run_filtering.sh:/VP_AR_full_System_dockerized/run_filtering.sh
+      - zed_resources:/usr/local/zed/resources
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   # Occlusion Refinement pipeline
   occlusion:
-    build: .
+    <<: *pipeline_image
     container_name: occlusion_refinement
     command: tail -f /dev/null
     volumes:
       - ./data:/VP_AR_full_System_dockerized/data
       - ./occlusion_refinement:/VP_AR_full_System_dockerized/occlusion_refinement
       - ./run_occlusion.sh:/VP_AR_full_System_dockerized/run_occlusion.sh
+      - zed_resources:/usr/local/zed/resources
     deploy:
       resources:
         reservations:
@@ -84,3 +100,6 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+volumes:
+  zed_resources:
