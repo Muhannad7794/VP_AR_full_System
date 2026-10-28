@@ -1,95 +1,144 @@
 /VP_AR_full_System
 │
-├── data/                                        # Ignored by Git (heavy media and outputs)
+├── data/                                        # Not tracked by Git (recordings and every output)
 │   │
 │   ├── raw/
-│   │   └── <dataset_name>/                      # Drop raw recordings here
-│   │       ├── *.mp4                            # Sony footage (e.g., 60 fps)
-│   │       └── *.svo2                           # ZED 2i footage (e.g., 30 fps)
+│   │   └── <dataset_name>/                      # One recording session
+│   │       ├── *.svo2                           # ZED 2i recording (Jetson, ~29.9 fps)
+│   │       ├── *.mp4                            # Sony recording (OBS, constant 30 fps)
+│   │       └── <name>_timestamps.csv, _events.csv, _board.csv, _settings.json
+│   │                                            # Optional logs of the Jetson recorder
 │   │
 │   ├── extracted/
 │   │   └── <dataset_name>/                      # Output of extract_frames.py
-│   │       ├── sony_rgb/                        # All raw Sony frames
-│   │       ├── zed_rgb/                         # All raw ZED left-eye frames
-│   │       └── zed_depth/                       # 16-bit ZED depth maps
+│   │       ├── sony_rgb/                        # Sony frames
+│   │       ├── zed_rgb/                         # Rectified ZED left images
+│   │       ├── zed_depth/                       # 16-bit depth, millimetres, 0 = no depth
+│   │       ├── zed_confidence/                  # 8-bit confidence, 1 (reliable) .. 100
+│   │       ├── zed_frames.csv                   # ZED timestamps, luma, motion per frame
+│   │       ├── sony_frames.csv                  # Sony container time, luma, motion per frame
+│   │       ├── extraction_info.json             # Extraction summary, recorder-log check
+│   │       └── kinematics/
+│   │           └── raw_skeleton_data.csv        # 38-joint skeleton (extract_kinematics.py)
 │   │
 │   ├── synced/
 │   │   └── <dataset_name>/                      # Output of compile_dataset.py
 │   │       ├── sony_rgb/                        # Temporally aligned Sony frames
-│   │       ├── zed_rgb/                         # Temporally aligned ZED frames
-│   │       └── zed_depth/                       # Temporally aligned depth maps
+│   │       ├── zed_rgb/                         # Matching ZED frames
+│   │       ├── zed_depth/                       # Matching depth maps
+│   │       ├── zed_confidence/                  # Matching confidence maps
+│   │       └── synced_index.csv                 # Source indices, times and residual per pair
 │   │
-│   ├── picked_for_alignment/
-│   │   └── <dataset_name>/                      # Manually curated calibration pairs (30–50 frames)
-│   │       ├── sony_rgb/                        # Selected Sony frames (e.g., 00450.png)
-│   │       └── zed_rgb/                         # Matching ZED frames (same filename)
+│   ├── picked_for_alignment/<dataset_name>/     # Calibration pairs selected by pick_frames.py
+│   ├── picked_for_validation/<dataset_name>/    # Held-out pairs selected by pick_frames.py
 │   │
 │   ├── json_output/
 │   │   └── <dataset_name>/
-│   │       ├── frame_mapping.json               # Raw DTW temporal alignment mapping
-│   │       ├── smoothed_frame_mapping.json      # Savitzky-Golay filtered mapping
-│   │       ├── spatial_calibration.json         # Intrinsics (K,D), extrinsics (R,T), UE5 offsets
-│   │       ├── detection_summary.json           # Per-frame ChArUco corner detection counts
-│   │       └── validation_report.json           # Per-frame reprojection error analysis
+│   │       ├── zed_intrinsics_extraction.json   # Rectified ZED intrinsics of the extraction session
+│   │       ├── frame_mapping.json               # Sony frame -> ZED frame, active window
+│   │       ├── frame_mapping_full.json          # The same for the whole overlap
+│   │       ├── frame_mapping_detail.csv         # Times, residual and flags per Sony frame
+│   │       ├── sync_report.json                 # Offsets, cover events, drift check
+│   │       ├── smoothed_frame_mapping.json      # Median-filtered mapping (compiled)
+│   │       ├── zed_intrinsics.json              # ZED intrinsics used by the calibration
+│   │       ├── detections.json.gz               # Board detections for every frame
+│   │       ├── detection_summary.json           # Detection counts
+│   │       ├── sony_intrinsics.json             # Sony lens models and held-out errors
+│   │       ├── pair_selection.json              # Calibration and held-out pairs
+│   │       ├── spatial_calibration.json         # Extrinsics, uncertainty, Unreal Engine values
+│   │       ├── validation_report.json           # Validation errors, checks and grade
+│   │       └── occlusion_stage1_report.json     # Confidence-gating statistics
+│   │
+│   ├── txt_output/<dataset_name>/
+│   │   └── mapping_comparison.txt               # Frames changed by the smoothing
 │   │
 │   └── plots/
 │       └── <dataset_name>/
-│           ├── drift_comparison.jpg             # Raw vs. smoothed temporal drift graph
-│           └── spatial/
-│               ├── reprojection_error_analysis.png  # Error distribution and per-frame bars
-│               ├── corner_coverage_sony_rgb.png     # Sony corner detection density map
-│               ├── corner_coverage_zed_rgb.png      # ZED corner detection density map
-│               ├── detection_check/             # Annotated frames from inspect_detections.py
-│               │   ├── sony_<frame>.jpg         # Sony frames with detected corners drawn
-│               │   └── zed_<frame>.jpg          # ZED frames with detected corners drawn
-│               └── diagnosis/                   # Output from diagnose_detection.py
-│                   ├── <dict>_board<N>x<M>_<frame>.jpg  # Annotated successful detections
-│                   └── summary.txt              # Best configuration found
+│           ├── drift_comparison.jpg             # Frame offset over the recording
+│           ├── sync/
+│           │   ├── sync_luma.png                # Brightness and cover events, both cameras
+│           │   ├── sync_correlation.png         # Motion correlation against offset
+│           │   ├── sync_drift.png               # Offset in sliding windows (drift check)
+│           │   └── sync_residuals.png           # Pairing time differences
+│           ├── spatial/
+│           │   ├── detection_timeline.png       # Corners found per frame, usable and still frames
+│           │   ├── sony_intrinsics_models.png   # Lens models, fitted and held-out error
+│           │   ├── sony_intrinsics_coverage.png # Sony corners used for the intrinsics
+│           │   ├── sony_runtime_displacement.png# Distortion left out by the pinhole runtime
+│           │   ├── pair_selection_features.png  # Position, distance and tilt of selected pairs
+│           │   ├── reprojection_error_analysis.png # Error distribution, per-pair error and Sony floor
+│           │   ├── error_vs_distance.png        # Error against board distance
+│           │   ├── bias_vs_inverse_distance.png # Signed bias against 1/distance (translation check)
+│           │   ├── depth_scale_check.png        # ZED depth / board distance (scale check)
+│           │   ├── error_across_sony_frame.png  # Error against distance from the image centre
+│           │   ├── corner_coverage_sony_rgb.png # Corners of the selected pairs, Sony
+│           │   └── corner_coverage_zed_rgb.png  # Corners of the selected pairs, ZED
+│           ├── kinematics/
+│           │   ├── 1Euro_noise_reduction_<joint>_<axis>.png  # Raw vs. 1 Euro filtered joint signal
+│           │   └── lma_expansiveness.png        # Kinesphere expansiveness over time
+│           └── occlusion/
+│               ├── confidence_gating_rejection_rate.png  # Removal rate and scene motion per frame
+│               ├── rejection_frequency_map.png  # How often each pixel is removed
+│               └── samples/                     # Depth, confidence and gate result of sample frames
 │
-├── temporal_alignment/                          # Phase 1: Time synchronization pipeline
-│   ├── extract_frames.py                        # Extracts frames from MP4 and SVO2
-│   ├── sync_frames.py                           # Motion-energy DTW temporal alignment
-│   ├── smooth_frames_mapping.py                 # Savitzky-Golay drift correction
-│   ├── compare_mappings.py                      # Generates drift_comparison.jpg
-│   └── compile_dataset.py                       # Assembles synchronized frame pairs
+├── docs/
+│   ├── index.html                               # Project page
+│   └── assets/                                  # Figures shown in README.md (collect_readme_assets.sh)
+│       ├── temporal/  spatial/  kinematics/  occlusion/
+│       └── (top-level images used by index.html)
 │
-├── spatial_alignment/                           # Phase 2: Spatial calibration pipeline
-│   ├── stereo_calibrate.py                      # Main calibrator: ChArUco stereo calibration
-│   │                                            #   Input:  data/picked_for_alignment/<dataset>/
-│   │                                            #   Output: data/json_output/<dataset>/spatial_calibration.json
-│   ├── inspect_detections.py                    # Pre-calibration detection check
-│   │                                            #   Annotates frames, outputs detection_summary.json
-│   ├── validate_calibration.py                  # Post-calibration reprojection error analysis
-│   │                                            #   Outputs validation_report.json and plots
-│   ├── apply_calibration.py                     # Prints UE5 LensOffset values from JSON
-│   │                                            #   Use: python3 apply_calibration.py --dataset <name> --ue5
-│   ├── diagnose_detection.py                    # Diagnostic tool: tries all ArUco dict variants
-│   │                                            #   and board sizes to identify working configuration
-│   └── preprocess_zed_frames.py                 # Optional: brightens/sharpens ZED frames before
-│                                                #   calibration (gamma correction, CLAHE, sharpening)
-├── skeleton_filtering/                          # Phase 3: Kinematic extraction and filtering
-│   ├── extract_kinematics.py                    # Extracts 3D joints from SVO to CSV
-│   ├── one_euro_filter.py                       # 1 Euro Filter mathematical class
-│   └── validate_kinematics.py                   # Applies filter and generates validation plots
+├── extract_frames.py                            # Phase 1: frames, depth, confidence, timestamps, signals
 │
-├── run_filtering.sh                             # One-click Phase 3 runner
-│                                                #  Usage: ./run_filtering.sh <dataset_name>
+├── temporal_alignment/                          # Phase 2: time synchronisation
+│   ├── check_svo.py                             # SVO integrity check against the recorder log
+│   ├── sync_frames.py                           # Offset from cover events and motion correlation,
+│   │                                            #   drift check, frame mapping (legacy: --method dtw)
+│   ├── smooth_frames_mapping.py                 # Median filter of the mapping, drift_comparison.jpg
+│   ├── compare_mappings.py                      # Lists frames changed by the smoothing
+│   └── compile_dataset.py                       # Copies the mapped pairs into data/synced/
 │
-├── run_temporal.sh                              # One-click Phase 1 runner
-│                                                #   Usage: ./run_temporal.sh <dataset_name>
-├── run_spatial.sh                               # One-click Phase 2 runner (4-step pipeline)
-│                                                #   Usage: ./run_spatial.sh <dataset_name>
-├── docker-compose.yml                           # Two services: sync (Phase 1) and align (Phase 2)
-├── Dockerfile                                   # GPU image: OpenCV-contrib, FastDTW, PyTorch
+├── spatial_alignment/                           # Phase 3: calibration ZED -> Sony
+│   ├── calib_common.py                          # Shared board definition (measured square length),
+│   │                                            #   detection, stillness and hold rules, grading
+│   ├── print_zed_intrinsics.py                  # Step 0: rectified ZED intrinsics from the SDK
+│   ├── inspect_detections.py                    # Step 1: board detection, usable and still frames
+│   ├── calibrate_sony_intrinsics.py             # Step 2: Sony lens models, held-out selection
+│   ├── pick_frames.py                           # Step 3: diverse stereo pairs, calibration / held-out
+│   ├── stereo_calibrate.py                      # Step 4: R and T with fixed intrinsics, bootstrap
+│   ├── validate_calibration.py                  # Step 5: held-out, end-to-end, scale and bias checks
+│   ├── apply_calibration.py                     # Step 6: values for Unreal Engine
+│   └── diagnose_detection.py                    # Legacy diagnostic: board / dictionary search
+│
+├── skeleton_filtering/                          # Phase 4: kinematic extraction and filtering
+│   ├── extract_kinematics.py                    # 38-joint skeleton from the SVO to CSV
+│   ├── one_euro_filter.py                       # 1 Euro Filter
+│   └── validate_kinematics.py                   # Filter validation and LMA expansiveness plots
+│
+├── occlusion_refinement/                        # Phase 6: offline validation of the depth gating
+│   ├── occlusion_pipeline.py                    # Refinement stages (confidence gating)
+│   └── validate_occlusion.py                    # Removal statistics, maps and sample figures
+│
+├── run_extract.sh                               # ./run_extract.sh <dataset> [options]
+├── run_temporal.sh                              # ./run_temporal.sh <dataset> [sync_frames.py options]
+├── run_spatial.sh                               # ./run_spatial.sh <dataset> [zed.json] [--sony-model NAME]
+│                                                #   [--from-step N] [--square-mm MM]
+├── run_filtering.sh                             # ./run_filtering.sh <dataset> [--joint J --axis A]
+├── run_occlusion.sh                             # ./run_occlusion.sh <dataset> [options]
+├── collect_readme_assets.sh                     # Copies README figures from data/plots/ to docs/assets/
+│
+├── docker-compose.yml                           # Services extract, sync, align, filter, occlusion
+│                                                #   (one shared image, GPU, zed_resources volume)
+├── Dockerfile                                   # ZED SDK 5.2.3 / CUDA 12.8 image, pyzed, OpenCV-contrib,
+│                                                #   PyTorch, NumPy 2
 ├── requirements.txt                             # Python dependencies
-├── Run-System-Instructions.md                   # Step-by-step usage guide
-└── README.md                                    # Full pipeline documentation
+├── directory_structure.txt                      # This file
+└── README.md                                    # Pipeline documentation
 
 ---
-Board specification (calib_io_charuco_200x150_8x11_15_11_DICT_4X4, A3 print):
-  BOARD_COLS    = 11   (squares horizontally, landscape orientation)
-  BOARD_ROWS    = 8    (squares vertically)
-  squareLength  = 0.028 m  (measure actual print before calibrating)
-  markerLength  = 0.021 m
-  ArUco dict    = DICT_4X4_50
-  legacyPattern = True for Sony, auto-detect for ZED (tries both True and False per frame)
+Board (calib.io ChArUco, A3 print):
+  BOARD_COLS      = 11      (squares horizontally)
+  BOARD_ROWS      = 8       (squares vertically, 70 inner corners)
+  Square length   = 28.36 mm measured (design 28 mm; set with --square-mm or MEASURED_SQUARE_MM)
+  Marker length   = 0.75 x square length
+  ArUco dict      = DICT_4X4_50
+  legacyPattern   = True (both cameras)

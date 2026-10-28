@@ -189,6 +189,7 @@
         .tag.cyan  { border-color: #2a6a6c;           color: var(--cyan); }
         .tag.blue  { border-color: #2a4f6c;           color: var(--accent); }
         .tag.purple{ border-color: #4a2a6c;           color: var(--accent2); }
+        .tag.green { border-color: #2f5a3a;           color: var(--emerald); }
 
         /* ─── Scroll indicator ──────────────────────────────────────────── */
         .scroll-hint {
@@ -305,6 +306,15 @@
         .pillar:nth-child(2)::before { background: var(--cyan); }
         .pillar:nth-child(3)::before { background: var(--accent); }
         .pillar:nth-child(4)::before { background: var(--accent2); }
+        .pillars.five .pillar:nth-child(3)::before { background: var(--emerald); }
+        .pillars.five .pillar:nth-child(4)::before { background: var(--accent); }
+        .pillars.five .pillar:nth-child(5)::before { background: var(--accent2); }
+
+        /* Five pillars: three on the first row, two wider ones on the second. */
+        .pillars.five { grid-template-columns: repeat(6, 1fr); }
+        .pillars.five .pillar { grid-column: span 2; }
+        .pillars.five .pillar:nth-child(4),
+        .pillars.five .pillar:nth-child(5) { grid-column: span 3; }
 
         .pillar-number {
             font-family: var(--mono);
@@ -446,6 +456,7 @@
         .stat-value.cyan   { color: var(--cyan); }
         .stat-value.blue   { color: var(--accent); }
         .stat-value.purple { color: var(--accent2); }
+        .stat-value.green  { color: var(--emerald); }
 
         .stat-label {
             font-family: var(--mono);
@@ -498,6 +509,30 @@
 
         .data-panel-title.cyan   { color: var(--cyan); }
         .data-panel-title.blue   { color: var(--accent); }
+        .data-panel-title.green  { color: var(--emerald); }
+
+        .sub-heading {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin: 56px 0 14px;
+        }
+
+        .finding {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 2px solid var(--gold);
+            padding: 16px 20px;
+            margin: 24px 0;
+            font-size: 13.5px;
+            color: var(--text);
+            line-height: 1.65;
+        }
+        .finding strong { color: #f0ebe2; font-weight: 500; }
+        .finding.green { border-left-color: var(--emerald); }
+        .finding.cyan  { border-left-color: var(--cyan); }
 
         .data-panel-badge {
             font-family: var(--mono);
@@ -1240,6 +1275,10 @@
         /* ─── Responsive ────────────────────────────────────────────────── */
         @media (max-width: 800px) {
             .pillars          { grid-template-columns: repeat(2, 1fr); }
+            .pillars.five     { grid-template-columns: repeat(2, 1fr); }
+            .pillars.five .pillar { grid-column: auto !important; }
+            .pillars.five .pillar:nth-child(5) { grid-column: 1 / -1 !important; }
+            .param-row        { grid-template-columns: 1fr; gap: 6px; }
             .pipeline-flow    { grid-template-columns: 1fr; grid-template-rows: auto; }
             .pipeline-connector { display: none; }
             .alignment-grid   { grid-template-columns: 1fr; }
@@ -1268,6 +1307,7 @@
                 <li><a href="#overview">Overview</a></li>
                 <li><a href="#pipeline">Pipeline</a></li>
                 <li><a href="#alignment">Alignment</a></li>
+                <li><a href="#occlusion">Occlusion</a></li>
                 <li><a href="#kinematic">Kinematic</a></li>
                 <li><a href="#embodied">Embodied</a></li>
                 <li><a href="#media">Media</a></li>
@@ -1283,17 +1323,18 @@
             <div class="hero-label">Virtual Production — Medialogy MSc · Aalborg University Copenhagen</div>
             <h1>Base-Free Tracking,<br>Depth <em>Occlusion</em><br>&amp; Embodied <em>AR</em></h1>
             <p class="hero-sub">
-                Synchronizing two cameras temporally and spatially. Driving an nDispaly instance on an LED volume with base-free inside out tracking.
-                Creating a real-time occlusion map from depth data to composite virtual elements with correct perspective and layering.
-                 Extracting and denoising a performer's 38-joint skeleton from raw depth data.
-                 Driving a live AR performance system not through the geometric accuracy of skeletal
+                Synchronizing two cameras in time and calibrating them in space. Driving an nDisplay instance on an LED volume with base-free, inside-out tracking.
+                Reprojecting live depth into the production camera's view to composite virtual elements with correct perspective and layering.
+                Extracting and denoising a performer's 38-joint skeleton from raw depth data.
+                Driving a live AR performance system not through the geometric accuracy of skeletal
                 position, but through the expressive quality of movement itself.
             </p>
             <div class="hero-meta">
                 <span class="tag gold">Embodied Interaction</span>
                 <span class="tag">Depth Camera · RGB Camera</span>
-                <span class="tag blue"> DTW . Savitzky-Golay</span>
+                <span class="tag blue">Timestamp · Motion-Correlation Sync</span>
                 <span class="tag cyan">Stereo Spatial Calibration</span>
+                <span class="tag green">Depth Reprojection · Occlusion</span>
                 <span class="tag blue">BODY_38 MoCap · 1 Euro Filter</span>
                 <span class="tag">LMA · Effort Theory</span>
                 <span class="tag purple">Unreal Engine 5</span>
@@ -1309,7 +1350,7 @@
     <section id="overview">
         <div class="container">
             <div class="section-label">01 — System Overview</div>
-            <h2>Four Technical Phases,<br>One Composited Frame</h2>
+            <h2>Five Technical Phases,<br>One Composited Frame</h2>
             <p>
                 The project establishes a complete Virtual Production pipeline in which two physically
                 co-located cameras — a Sony α mirrorless and a ZED 2i depth camera — are first
@@ -1319,6 +1360,7 @@
                     <li>SLAM-based Base-free Tracking</li>
                     <li>Depth sensor for real-time Occlusion Mapping</li>
                     <li>a 38-joint skeleton for MoCap and embodied interaction.</li>
+                </list>
             </p>
             <p>
                 The result is a full XR system with unified sensory input, providing a 
@@ -1329,32 +1371,38 @@
                 a compositing mode, and an interactive mode.
                 
             </p>
-            <div class="pillars reveal">
+            <div class="pillars five reveal">
                 <div class="pillar">
                     <div class="pillar-number">01 / TEMPORAL</div>
                     <h4>Camera Sync</h4>
-                    <p>ResNet visual feature extraction and Dynamic Time Warping align the two independently
-                        clocked cameras frame-by-frame. After that, the Savitzky-Golay smoothing algorithm
-                        is used to absorb hardware
-                        clock drift before synced frames are written.</p>
+                    <p>Each camera's own frame timestamps, a shared cover event and the correlation of
+                        image motion give the time offset between the two independently clocked cameras.
+                        Every Sony frame is then paired with the ZED frame taken at the same moment.</p>
                 </div>
                 <div class="pillar">
                     <div class="pillar-number">02 / SPATIAL</div>
                     <h4>Stereo Calibration</h4>
-                    <p>ChArUco-board stereo calibration computes the intrinsic matrices and the
-                        extrinsic transform between the RGB and depth cameras' optical centres. The spatial
-                        alignment is the core enabler of a clean persepcive-correct compositing and accurate skeleton reprojection.
+                    <p>ChArUco-board calibration measures the Sony lens and the rotation and translation
+                        between the two cameras, tested on held-out views and against the ZED's own depth.
+                        It places the virtual camera and the live depth in the Sony's exact viewpoint.
                     </p>
                 </div>
                 <div class="pillar">
-                    <div class="pillar-number">03 / KINEMATIC</div>
+                    <div class="pillar-number">03 / OCCLUSION</div>
+                    <h4>Depth-Correct Compositing</h4>
+                    <p>The ZED depth is cleaned on the Jetson, streamed to Unreal Engine and reprojected into
+                        the Sony's view, so that real people and objects hide CG elements behind them,
+                        pixel by pixel, with a moving camera.</p>
+                </div>
+                <div class="pillar">
+                    <div class="pillar-number">04 / KINEMATIC</div>
                     <h4>Skeleton Denoising</h4>
                     <p>ZED BODY_38 yields 38-joint 3D coordinates at 30 Hz. The 1 Euro Filter
                         suppresses geometric sensor noise per-joint before any LMA descriptor
                         is computed from the stream.</p>
                 </div>
                 <div class="pillar">
-                    <div class="pillar-number">04 / EMBODIED</div>
+                    <div class="pillar-number">05 / EMBODIED</div>
                     <h4>Kinematic AR</h4>
                     <p>Four continuous LMA Effort scalars computed from the denoised skeleton data.
                         The cleaned skeletal data drives the Niagara particle systems and UE5 material WPO deformations.
@@ -1370,18 +1418,19 @@
             <div class="section-label cyan">02 — The Pipeline</div>
             <h2>From Raw Footage<br>to Live AR Performance</h2>
             <p>
-                The system consists of four main taechnical phases. Each phase has an offline, Python-based,
-                containerized implementation, followed by a C++ real-time implmentation, and blueprints configuration
-                inside Unreal Engine 5. 
+                The system consists of four main technical phases. Each phase has an offline, Python-based,
+                containerized implementation, followed by a C++ and HLSL real-time implementation and Blueprint
+                configuration inside Unreal Engine 5. The offline side measures and validates; the runtime side
+                uses the measured values every frame.
             </p>
             <div class="pipeline-flow reveal">
                 <div class="pipeline-node p1">
                     <div class="pipeline-num">Phase 01</div>
                     <h4>Temporal Alignment</h4>
                     <div class="pipeline-techs">
-                        <span class="pipeline-tech">ResNet visual feature extraction</span>
-                        <span class="pipeline-tech">Dynamic Time Warping (FastDTW)</span>
-                        <span class="pipeline-tech">Savitzky-Golay smoothing</span>
+                        <span class="pipeline-tech">Per-frame camera timestamps</span>
+                        <span class="pipeline-tech">Cover events · motion correlation</span>
+                        <span class="pipeline-tech">Drift check · nearest-frame pairing</span>
                     </div>
                     <div class="pipeline-output">→ Synced frame pairs</div>
                 </div>
@@ -1397,11 +1446,11 @@
                     <div class="pipeline-num">Phase 02</div>
                     <h4>Spatial Calibration</h4>
                     <div class="pipeline-techs">
-                        <span class="pipeline-tech">ChArUco corner detection</span>
-                        <span class="pipeline-tech">OpenCV stereo calibration</span>
-                        <span class="pipeline-tech">Reprojection error validation</span>
+                        <span class="pipeline-tech">ChArUco detection · still-pose holds</span>
+                        <span class="pipeline-tech">Sony intrinsics · fixed-intrinsics stereo solve</span>
+                        <span class="pipeline-tech">Held-out and end-to-end validation</span>
                     </div>
-                    <div class="pipeline-output">→ UE Camera offset · Depth Reprojection </div>
+                    <div class="pipeline-output">→ UE camera offset · Depth reprojection</div>
                 </div>
                 <div class="pipeline-connector">
                     <svg width="48" height="40" viewBox="0 0 48 40">
@@ -1434,7 +1483,7 @@
                     <h4>Runtime Launch</h4>
                     <div class="pipeline-techs">
                         <span class="pipeline-tech">ZED SLAM — 6-DoF Tracking</span>
-                        <span class="pipeline-tech">ZED Depth —  AR Occlusion</span>
+                        <span class="pipeline-tech">ZED Depth — gated, reprojected, AR occlusion</span>
                         <span class="pipeline-tech">ZED MoCap — Niagara · WPO — LMA response</span>
                     </div>
                     <div class="pipeline-output">→ Composited live AR frame</div>
@@ -1449,100 +1498,478 @@
             <div class="section-label cyan">03 — Camera Alignment</div>
             <h2>Two Cameras,<br>One Reference Frame</h2>
             <p>
-                The Sony α and ZED 2i are mounted on the same rig but operate as fully independent
-                devices, and are utilized for completly different purposes.<br>
-                They have different sensors, different internal clocks, and different optical centres.<br>
-                The alignment pipeline resolves both the <em>temporal</em> desynchronisation
-                (when did they see the same moment?) and the <em>spatial</em> offset (exactly
-                how far apart are their optical centres, and at what angle?).
+                The Sony α and the ZED 2i are mounted on the same rig but operate as fully independent
+                devices with different sensors, different lenses and different clocks. Before a ZED depth
+                value can be used in the Sony image, two questions must be answered: <em>when</em> did both
+                cameras see the same moment, and <em>where</em> exactly is the Sony relative to the ZED?
+                The figures below come from one calibration recording (dataset_05, about five minutes).
             </p>
-            <div class="alignment-grid">
-                <div class="alignment-block reveal">
-                    <h3>Temporal Alignment</h3>
-                    <p style="font-size:13px; max-width:none; color:var(--muted);">
-                        A pre-trained ResNet extracts deep visual feature vectors from every extracted
-                        frame. Dynamic Time Warping then finds the globally optimal frame-to-frame
-                        correspondence between the two cameras by warping the feature sequences rather
-                        than relying on hardware timestamps, which carry cumulative drift.
-                        Savitzky-Golay polynomial smoothing then removes high-frequency jitter from
-                        the raw DTW mapping before synced frames are written to disk.
-                    </p>
-                    <div class="data-panel reveal reveal-delay-1">
-                        <div class="data-panel-header">
-                            <span class="data-panel-title">Temporal Drift</span>
-                        </div>
-                        <img src="assets/drift_comparison.jpg" alt="Temporal drift comparison: raw DTW vs Savitzky-Golay smoothed" />
-                        <div class="data-panel-caption">
-                            Blue: raw DTW frame-to-frame offset. Red: Savitzky-Golay smoothed mapping.
-                        </div>
-                    </div>
+
+            <!-- ── Temporal ─────────────────────────────────────────── -->
+            <div class="sub-heading">Temporal Alignment</div>
+            <p>
+                The ZED stores a timestamp with every frame; the Sony recording has an exact, constant
+                30 frames per second. Both clocks run in real time, so the two time axes differ only by an
+                offset. It is measured in two independent ways that must agree: the moment both lenses
+                are covered with a card (visible as a dark period in both cameras), and the correlation of
+                image motion between the two cameras over thousands of frames. The pipeline then checks
+                that the offset does not drift over the recording and pairs every Sony frame with the ZED
+                frame taken closest in time. Frames the ZED dropped are excluded rather than guessed.
+            </p>
+            <div class="stat-row">
+                <div class="stat-box">
+                    <div class="stat-value cyan">−1682.8 ms</div>
+                    <div class="stat-label">Measured offset<br>between the two clocks</div>
                 </div>
-                <div class="alignment-block reveal reveal-delay-2">
-                    <h3>Spatial Calibration</h3>
-                    <p style="font-size:13px; max-width:none; color:var(--muted);">
-                        A ChArUco board (8×11 squares, DICT_4X4_50) is recorded by both cameras
-                        simultaneously. Corner detection, per-camera intrinsic calibration, and
-                        full stereo calibration produce the rotation and translation from ZED to Sony
-                        coordinate space. Reprojection error measures how well the calibrated
-                        model reconstructs observed corner positions. The resulting translation
-                        vector is applied directly as a UE5 CineCamera lens offset.
-                    </p>
-                    <div class="stat-row">
-                        <div class="stat-box">
-                            <div class="stat-value cyan">0.807</div>
-                            <div class="stat-label">Stereo RMS<br>reprojection error (px)</div>
+                <div class="stat-box">
+                    <div class="stat-value cyan">0.987</div>
+                    <div class="stat-label">Motion correlation<br>at the offset</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value cyan">7,817</div>
+                    <div class="stat-label">Frame pairs within<br>20 ms of each other</div>
+                </div>
+            </div>
+            <div class="plots-pair-wrapper reveal">
+                <div class="plots-pair-header">
+                    <span class="data-panel-title cyan">Measuring the Offset</span>
+                    <span class="data-panel-badge">dataset_05 · 8,919 Sony frames</span>
+                </div>
+                <div class="plots-pair">
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Brightness &amp; Cover Events</span>
                         </div>
-                        <div class="stat-box">
-                            <div class="stat-value cyan">36</div>
-                            <div class="stat-label">Curated frame<br>pairs used</div>
-                        </div>
-                        <div class="stat-box">
-                            <div class="stat-value cyan">45+</div>
-                            <div class="stat-label">Min. ChArUco<br>corners per frame</div>
+                        <img src="assets/temporal/sync_luma.png" alt="Average brightness of both cameras over time, with cover events" />
+                        <div class="data-panel-caption">
+                            Average brightness of every frame, both cameras, the ZED shifted by the offset.
+                            Grey bands: lenses covered. Green lines: the usable window. With the right offset
+                            the two curves rise and fall together.
                         </div>
                     </div>
                     <div class="data-panel">
                         <div class="data-panel-header">
-                            <span class="data-panel-title cyan">Reprojection Error Analysis</span>
+                            <span class="data-panel-title">Motion Correlation</span>
                         </div>
-                        <img src="assets/reprojection_error_analysis.png" alt="Per-frame reprojection error bar chart and distribution" />
+                        <img src="assets/temporal/sync_correlation.png" alt="Correlation of image motion against candidate offset" />
                         <div class="data-panel-caption">
-                            Per-frame mean reprojection error across all 36 validated frame pairs.
+                            How well the two cameras' motion matches for each candidate offset. One high,
+                            narrow peak (r = 0.987, next best 0.62) means the offset is unambiguous.
                         </div>
                     </div>
                 </div>
             </div>
-            <h3>ChArUco Corner Coverage</h3>
-            <p>Heatmaps showing where corners were detected across the image plane for each camera.
-               Broad spatial coverage — corners distributed across the full sensor area — is essential
-               for a well-conditioned stereo calibration. Both cameras achieved strong coverage in dataset_04.</p>
             <div class="plots-pair-wrapper reveal">
                 <div class="plots-pair-header">
-                    <span class="data-panel-title cyan">Corner Detection Density</span>
-                    <span class="data-panel-badge">dataset_04 · 36 pairs</span>
+                    <span class="data-panel-title cyan">Checking the Result</span>
+                    <span class="data-panel-badge">drift 56 ± 21 ppm · not applied</span>
+                </div>
+                <div class="plots-pair">
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Drift Check</span>
+                        </div>
+                        <img src="assets/temporal/sync_drift.png" alt="Offset measured in sliding windows along the recording" />
+                        <div class="data-panel-caption">
+                            The offset measured again in 40-second windows. If one clock ran faster, the
+                            points would form a slope. Inside the green band (half a frame) one constant
+                            offset pairs every frame correctly.
+                        </div>
+                    </div>
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Pairing Residuals</span>
+                        </div>
+                        <img src="assets/temporal/sync_residuals.png" alt="Time difference between paired frames" />
+                        <div class="data-panel-caption">
+                            Time between each Sony frame and its ZED partner: spread evenly up to about
+                            half a frame, because the ZED records slightly slower than 30 fps. None exceeds 20 ms.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="data-panel reveal">
+                <div class="data-panel-header">
+                    <span class="data-panel-title cyan">Frame Offset Over the Recording</span>
+                    <span class="data-panel-badge">93 ZED frames dropped in 24 gaps</span>
+                </div>
+                <img src="assets/temporal/drift_comparison.jpg" alt="Sony frame number minus paired ZED frame number over the recording" />
+                <div class="data-panel-caption">
+                    Sony frame number minus the paired ZED frame number. It grows steadily because the ZED records
+                    about 29.86 frames per second, and it jumps where the ZED dropped frames. The red curve is the
+                    filtered mapping that is compiled; with time-based pairing it is identical to the raw one.
+                </div>
+            </div>
+
+            <!-- ── Spatial ──────────────────────────────────────────── -->
+            <div class="sub-heading">Spatial Calibration</div>
+            <p>
+                A ChArUco board (11 × 8 squares, DICT_4X4_50) is held still in many poses in front of both
+                cameras. Because the board's size is known, every view gives corners whose 3D positions are
+                known and whose image positions are measured. The pipeline is built so that errors cannot hide
+                inside each other: the ZED's lens values come from its SDK, the Sony's lens is measured from
+                Sony views alone, and the rotation and translation between the cameras are then solved with
+                both lenses fixed. Every result is tested on views it was not fitted on.
+            </p>
+            <div class="param-table reveal">
+                <div class="param-row">
+                    <div class="param-name">0 · ZED lens</div>
+                    <div class="param-desc">Rectified ZED intrinsics read from the SDK. The SDK computes depth on the same grid, so these are exact and never estimated.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">1 · Detection</div>
+                    <div class="param-desc">Board detection in every synced frame; frames with enough well-spread corners and a still board are kept, one per pose.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">2 · Sony lens</div>
+                    <div class="param-desc">Five lens models fitted on 40 Sony views and scored on 118 held-out views.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">3 · Pair selection</div>
+                    <div class="param-desc">140 distinct stereo poses ordered by diversity (position, distance, tilt): 40 for calibration, 100 held out.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">4 · Extrinsics</div>
+                    <div class="param-desc">Rotation and translation ZED → Sony with both lenses fixed, outlier rejection and a 200-resample bootstrap.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">5 · Validation</div>
+                    <div class="param-desc">Held-out prediction error, the same test through the ZED's measured depth, and checks for scale and systematic bias.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">6 · Unreal Engine</div>
+                    <div class="param-desc">Lens offset, focal length, field of view and reprojection parameters for the runtime.</div>
+                </div>
+            </div>
+            <div class="stat-row">
+                <div class="stat-box">
+                    <div class="stat-value cyan">1.53 px</div>
+                    <div class="stat-label">End-to-end error,<br>held-out pairs</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value cyan">±0.3 mm</div>
+                    <div class="stat-label">Translation<br>uncertainty</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value cyan">1.0009</div>
+                    <div class="stat-label">ZED depth ÷<br>board distance</div>
+                </div>
+            </div>
+
+            <div class="data-panel reveal">
+                <div class="data-panel-header">
+                    <span class="data-panel-title cyan">Board Detection Over the Recording</span>
+                    <span class="data-panel-badge">70 corners per board</span>
+                </div>
+                <img src="assets/spatial/detection_timeline.png" alt="Number of board corners detected per frame in both cameras" />
+                <div class="data-panel-caption">
+                    Corners found in every frame (top: Sony, bottom: ZED). Green: usable and still, the calibration
+                    candidates. The ZED loses corners in the second half, where the board is about 1.3 m away and
+                    appears small in its wider lens; the pipeline needs only enough well-spread corners, not the whole board.
+                </div>
+            </div>
+
+            <div class="plots-pair-wrapper reveal">
+                <div class="plots-pair-header">
+                    <span class="data-panel-title cyan">Sony Lens &amp; Pair Selection</span>
+                    <span class="data-panel-badge">steps 2 and 3</span>
+                </div>
+                <div class="plots-pair">
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Lens Model Comparison</span>
+                        </div>
+                        <img src="assets/spatial/sony_intrinsics_models.png" alt="Reprojection error of five Sony lens models" />
+                        <div class="data-panel-caption">
+                            Error of each lens model on fitted (light) and held-out (dark) views. The distortion
+                            models fit 0.2 px better but only with a 14 % longer focal length, a known trade-off;
+                            the pinhole matches the 16 mm optics and is used.
+                        </div>
+                    </div>
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Selected Stereo Poses</span>
+                        </div>
+                        <img src="assets/spatial/pair_selection_features.png" alt="Image position, distance, tilt and direction of the selected board poses" />
+                        <div class="data-panel-caption">
+                            Each dot is one board pose: where it was in the frame, how far and how tilted, and
+                            which way it faced. Several distances are what let rotation and translation errors be told apart.
+                        </div>
+                    </div>
+                </div>
+                <div class="plots-pair">
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Sony Corner Coverage</span>
+                        </div>
+                        <img src="assets/spatial/sony_intrinsics_coverage.png" alt="Sony corners used for the lens calibration" />
+                        <div class="data-panel-caption">
+                            Every corner used to measure the Sony lens. A lens model is only trustworthy where it
+                            has seen corners, so coverage up to the edges matters.
+                        </div>
+                    </div>
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Distortion Left Out at Runtime</span>
+                        </div>
+                        <img src="assets/spatial/sony_runtime_displacement.png" alt="Displacement between the selected lens model and the pinhole runtime model" />
+                        <div class="data-panel-caption">
+                            How far the runtime's pinhole camera differs from the selected lens model, per pixel.
+                            The selected model is the pinhole itself, so the map is zero (the scale shows 10⁻¹³ px rounding).
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Validation — Does the Calibration Predict?</h3>
+            <p>
+                The validation does not ask how well the calibration fits its own data, but how well it predicts
+                new data. The board pose seen by the ZED is moved into the Sony with the calibration and compared
+                with where the Sony actually saw the corners (corner transfer, 2.00 px on held-out pairs). The same
+                test through the ZED's <em>measured depth</em>, the path the live system uses, gives 1.53 px. A
+                "Sony floor" (1.29 px: the board pose fitted to the Sony alone) shows what no calibration can remove.
+                The calibration is graded on what it adds above that floor: 1.53 px, <em>Acceptable</em>.
+            </p>
+            <div class="data-panel reveal">
+                <div class="data-panel-header">
+                    <span class="data-panel-title cyan">Reprojection Error Analysis</span>
+                    <span class="data-panel-badge">40 calibration · 100 held-out pairs</span>
+                </div>
+                <img src="assets/spatial/reprojection_error_analysis.png" alt="Error distribution and per-pair error with the Sony floor" />
+                <div class="data-panel-caption">
+                    Left: the error of every predicted corner. Right: the error of each pair (bar) and that pair's Sony
+                    floor (dot). A bar far above its dot is error added by the camera-to-camera chain; a bar close to its
+                    dot is error already present in the Sony image.
+                </div>
+            </div>
+            <div class="data-panel reveal">
+                <div class="data-panel-header">
+                    <span class="data-panel-title cyan">Error Against Distance</span>
+                    <span class="data-panel-badge">corner transfer · end-to-end</span>
+                </div>
+                <img src="assets/spatial/error_vs_distance.png" alt="Per-pair error against board distance" />
+                <div class="data-panel-caption">
+                    Error of each pair against the board's distance from the ZED. A translation error grows towards the
+                    camera; a rotation error does not depend on distance. The largest errors are at 0.6 m, where the board
+                    reaches the edges of the Sony frame.
+                </div>
+            </div>
+            <div class="data-panel reveal">
+                <div class="data-panel-header">
+                    <span class="data-panel-title cyan">Signed Bias Against Inverse Distance</span>
+                    <span class="data-panel-badge">implied translation error 0.1–0.4 mm</span>
+                </div>
+                <img src="assets/spatial/bias_vs_inverse_distance.png" alt="Average signed error against inverse distance with fitted lines" />
+                <div class="data-panel-caption">
+                    The average direction of each pair's error against 1/distance. Random errors average out; a wrong
+                    translation shifts the image in proportion to 1/distance and shows as a slope. The fitted slopes
+                    imply a translation error below half a millimetre.
+                </div>
+            </div>
+            <div class="plots-pair-wrapper reveal">
+                <div class="plots-pair-header">
+                    <span class="data-panel-title cyan">Scale &amp; Lens Checks</span>
+                    <span class="data-panel-badge">held-out and calibration pairs</span>
+                </div>
+                <div class="plots-pair">
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Depth Scale Check</span>
+                        </div>
+                        <img src="assets/spatial/depth_scale_check.png" alt="ZED depth divided by board-pose distance" />
+                        <div class="data-panel-caption">
+                            ZED depth divided by the distance computed from the board's size: within ±1 % of 1.0 at
+                            every distance, so depth and calibration share one scale.
+                        </div>
+                    </div>
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Error Across the Sony Frame</span>
+                        </div>
+                        <img src="assets/spatial/error_across_sony_frame.png" alt="Corner error against distance from the image centre" />
+                        <div class="data-panel-caption">
+                            Error against distance from the image centre: about 1.7 px up to 800 px, rising to about 3 px
+                            towards the corners, where the pinhole model leaves out the lens's residual distortion.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="finding reveal">
+                <strong>The board was 1.3 % larger than designed.</strong> With the design square length (28 mm), the
+                ZED's measured depth read 1.4 % farther than the board geometry, and the error through the live depth
+                path was 3.3 px with a systematic shift growing towards the camera. Measuring the print (312 mm over 11
+                squares, 28.36 mm per square) brought the ratio to 1.0009 and the error to 1.53 px. Every distance a
+                calibration reports inherits the board's size, so the pipeline now records the size it used and checks
+                it against the ZED depth.
+            </div>
+            <div class="plots-pair-wrapper reveal">
+                <div class="plots-pair-header">
+                    <span class="data-panel-title cyan">Corner Coverage of the Stereo Pairs</span>
+                    <span class="data-panel-badge">dataset_05 · 140 pairs</span>
                 </div>
                 <div class="plots-pair">
                     <div class="data-panel">
                         <div class="data-panel-header">
                             <span class="data-panel-title">Sony α — RGB Camera</span>
                         </div>
-                        <img src="assets/corner_coverage_sony_rgb.png" alt="Sony corner coverage heatmap" />
+                        <img src="assets/spatial/corner_coverage_sony_rgb.png" alt="Sony corner coverage of the selected pairs" />
                     </div>
                     <div class="data-panel">
                         <div class="data-panel-header">
                             <span class="data-panel-title">ZED 2i — Depth Camera</span>
                         </div>
-                        <img src="assets/corner_coverage_zed_rgb.png" alt="ZED corner coverage heatmap" />
+                        <img src="assets/spatial/corner_coverage_zed_rgb.png" alt="ZED corner coverage of the selected pairs" />
                     </div>
+                </div>
+                <div class="data-panel-caption" style="background:var(--surface);">
+                    The Sony coverage reaches the frame edges; the ZED's wider lens sees the same boards smaller and
+                    closer to its centre. Coverage of the Sony frame is what matters, because that is where the result is used.
+                </div>
+            </div>
+            <div class="stat-row">
+                <div class="stat-box">
+                    <div class="stat-value cyan">16.48 mm</div>
+                    <div class="stat-label">Virtual camera<br>focal length</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value cyan">70.53°</div>
+                    <div class="stat-label">Horizontal field<br>of view</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value cyan">14.1 cm</div>
+                    <div class="stat-label">Sony–ZED<br>optical-centre distance</div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- ── 04 — Kinematic Extraction ────────────────────────────────── -->
+    <!-- ── 04 — Depth Occlusion ─────────────────────────────────────── -->
+    <section id="occlusion">
+        <div class="container">
+            <div class="section-label green">04 — Depth Occlusion</div>
+            <h2>Real Surfaces<br>in Front of CG</h2>
+            <p>
+                For every pixel of the Sony image, the composite decides whether the real scene or the CG element
+                is closer to the camera. The real distance comes from the ZED depth map; the CG distance from Unreal
+                Engine. When the real surface is closer, the camera image wins and the performer hides the CG.
+                Depth errors show up in two ways: CG appearing on the performer (show-through), and holes cut into CG
+                around the performer, where unreliable pixels claim to be near. Both concentrate along silhouettes,
+                where stereo matching cannot tell foreground from background.
+            </p>
+            <div class="param-table reveal">
+                <div class="param-row">
+                    <div class="param-name">Gate · Jetson</div>
+                    <div class="param-desc">Pixels whose ZED confidence value is above 50 are removed and sent as an explicit "invalid" code, separate from "far".</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">Stream · NDI</div>
+                    <div class="param-desc">Depth encoded as 8-bit codes: 0–235 for 0.5–6.0 m, 255 for invalid, with a guard band against compression errors.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">Reproject · HLSL</div>
+                    <div class="param-desc">For every Sony pixel, a walk along its line of sight through the ZED depth map finds the first real surface, using the calibration above. Invalid pixels are stepped over; areas hidden from the ZED take the background depth behind them.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">Median · 5×5</div>
+                    <div class="param-desc">Removes isolated depth speckles without moving edges.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">Matte</div>
+                    <div class="param-desc">Depth comparison with a small bias towards CG, a 1-pixel erosion of the real-world cut-out and a temporal average.</div>
+                </div>
+                <div class="param-row">
+                    <div class="param-name">Edges</div>
+                    <div class="param-desc">Feathering and image-guided snapping of the matte edge to edges in the Sony image.</div>
+                </div>
+            </div>
+            <div class="finding green reveal">
+                <strong>A depth map is not a picture.</strong> Unreal Engine treats an NDI video texture as an sRGB
+                colour image and converts every value from sRGB to linear light when it is read. For depth codes this
+                compressed all distances towards the camera: a performer at 2.0 m was read at about 0.8 m, and the
+                reprojection over-corrected the parallax between the two cameras, placing the silhouette up to 130 px
+                too high at close range. Converting the values back in the shader put the depth silhouette on the
+                performer and removed most of the edge artefacts the later filters had been compensating for.
+            </div>
+            <div class="finding green reveal">
+                <strong>Less filtering after the fix.</strong> A hole-fill stage that copied the nearest valid depth into
+                invalid pixels was removed: once the reprojection stepped over invalid pixels correctly, the fill only
+                enlarged the performer's cut-out and made its edges flicker. Each remaining stage was re-tuned on its own,
+                in pipeline order, rather than tuned together on the final image.
+            </div>
+
+            <h3>Offline Validation of the Confidence Gate</h3>
+            <p>
+                Before the gate's threshold is used live, the offline service measures on a recorded dataset how many
+                depth pixels it removes, where, and whether removal follows the performer's movement. It reads the
+                synchronised depth and confidence frames, so it runs after the temporal alignment.
+            </p>
+            <div class="stat-row">
+                <div class="stat-box">
+                    <div class="stat-value green">0.64 %</div>
+                    <div class="stat-label">Mean share of depth pixels<br>removed (threshold 50)</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value green">0.42 %</div>
+                    <div class="stat-label">Empty-room baseline<br>(static edges)</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value green">10–12 %</div>
+                    <div class="stat-label">Pixels without depth on the<br>live rig (6 % ungated)</div>
+                </div>
+            </div>
+            <div class="data-panel reveal">
+                <div class="data-panel-header">
+                    <span class="data-panel-title green">Removal Rate &amp; Scene Motion</span>
+                    <span class="data-panel-badge">dataset_01 · frames 400–6049</span>
+                </div>
+                <img src="assets/occlusion/confidence_gating_rejection_rate.png" alt="Share of depth pixels removed per frame, with scene motion" />
+                <div class="data-panel-caption">
+                    Top: share of depth pixels removed in each frame, with the mean. Bottom: how much the scene moved.
+                    When removal rises with motion, the gate is reacting to the performer (moving silhouettes, motion blur)
+                    rather than to the static room. Numbered lines mark the sample frames.
+                </div>
+            </div>
+            <div class="plots-pair-wrapper reveal">
+                <div class="plots-pair-header">
+                    <span class="data-panel-title green">Where the Gate Acts</span>
+                    <span class="data-panel-badge">confidence threshold 50</span>
+                </div>
+                <div class="plots-pair">
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Removal Frequency Map</span>
+                        </div>
+                        <img src="assets/occlusion/rejection_frequency_map.png" alt="How often each pixel is removed by the gate" />
+                        <div class="data-panel-caption">
+                            Each pixel coloured by how often it was removed. Dark red lines are static room edges, removed
+                            in nearly every frame; faint areas are removed only some of the time, where the performer moved.
+                        </div>
+                    </div>
+                    <div class="data-panel">
+                        <div class="data-panel-header">
+                            <span class="data-panel-title">Sample Frame</span>
+                        </div>
+                        <img src="assets/occlusion/sample_example.png" alt="Depth map, confidence map and gate result of one sample frame" />
+                        <div class="data-panel-caption">
+                            One frame: the depth map, the sensor's confidence map, and the gate's result with removed
+                            pixels in red. The bottom row zooms 4× into the region that changed most in this frame.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <p>
+                The removal rate is a proxy: it shows that the gate targets the right pixels, not how often the live
+                composite is wrong. Next to every foreground object there is also a strip the Sony sees and the ZED,
+                about 14 cm away, cannot; the reprojection fills it with the background depth, which is correct but carries
+                no detail of its own.
+            </p>
+        </div>
+    </section>
+
+    <!-- ── 05 — Kinematic Extraction ────────────────────────────────── -->
     <section id="kinematic">
         <div class="container">
-            <div class="section-label blue">04 — Kinematic Extraction</div>
+            <div class="section-label blue">05 — Kinematic Extraction</div>
             <h2>Denoising<br>the Skeleton Stream</h2>
             <p>
                 The ZED SDK's <code>HUMAN_BODY_ACCURATE</code> model tracks 38 joints in the
@@ -1644,7 +2071,7 @@
                             <span class="data-panel-title blue">1 Euro Filter — Noise Reduction</span>
                             <span class="data-panel-badge">right_wrist · X axis</span>
                         </div>
-                        <img src="assets/1Euro_noise_reduction_right_wrist_x.png"
+                        <img src="assets/kinematics/1Euro_noise_reduction_right_wrist_x.png"
                              alt="1 Euro Filter: raw vs filtered right wrist X coordinate" />
                         <div class="data-panel-caption">
                             Red: raw ZED SDK output. Blue: 1 Euro filtered signal.
@@ -1694,19 +2121,19 @@
             <p>
                 Before the descriptor system runs in real time, the Expansiveness metric is computed
                 offline as an analytical validation of the denoised skeleton stream. It measures the
-                maximum reach distance from the midspine (<code>spine_2</code>) to either wrist and elbow
-                (the most direct proxies for the performer's use of kinesphere space in Laban's sense)
+                maximum reach distance from the midspine (<code>spine_2</code>) to either wrist,
+                the most direct proxy for the performer's use of kinesphere space in Laban's sense.
                 The signal peaks correspond to large open gestures; valleys mark arms held close to the body.
             </p>
             <div class="data-panel reveal">
                 <div class="data-panel-header">
                     <span class="data-panel-title blue">LMA Kinesphere Expansiveness</span>
-                    <span class="data-panel-badge">(spine_2 → left_wrist, spine_2 → right_wrist, spine_2 → left_elbow, spine_2 → right_elbow)</span>
+                    <span class="data-panel-badge">max(spine_2 → left_wrist, spine_2 → right_wrist)</span>
                 </div>
-                <img src="assets/lma_expansiveness.png"
+                <img src="assets/kinematics/lma_expansiveness.png"
                      alt="LMA Expansiveness metric over time: spine_2 to distal wrist distance in mm" />
                 <div class="data-panel-caption">
-                    Y-axis: Euclidean distance from <code>spine_2</code> to each wrist and elbow, in mm.
+                    Y-axis: Euclidean distance from <code>spine_2</code> to the farther wrist, in mm.
                     Computed from raw (unfiltered) positions to preserve full dynamic range.
                     This time-series is the foundational validation for the Expansiveness descriptor
                     used in the live system.
@@ -1715,10 +2142,10 @@
         </div>
     </section>
 
-    <!-- ── 05 — Embodied Interaction ────────────────────────────────── -->
+    <!-- ── 06 — Embodied Interaction ────────────────────────────────── -->
     <section id="embodied">
         <div class="container">
-            <div class="section-label purple">05 — Embodied Interaction</div>
+            <div class="section-label purple">06 — Embodied Interaction</div>
             <h2>Four Qualities - Real-Time Interaction</h2>
             <p>
                 The system does not classify gesture types or respond only to body position.
@@ -1828,10 +2255,10 @@
         </div>
     </section>
 
-    <!-- ── 06 — Demonstration ───────────────────────────────────────── -->
+    <!-- ── 07 — Demonstration ───────────────────────────────────────── -->
     <section id="demo">
         <div class="container">
-            <div class="section-label">06 — Demonstration</div>
+            <div class="section-label">07 — Demonstration</div>
             <h2>A Grid That Listens<br>to How You Move</h2>
             <div class="demo-layout">
                 <div class="demo-visual">
@@ -1875,10 +2302,10 @@
         </div>
     </section>
 
-    <!-- ── 07 — Media & Footage ──────────────────────────────────────── -->
+    <!-- ── 08 — Media & Footage ──────────────────────────────────────── -->
     <section id="media">
         <div class="container">
-            <div class="section-label">07 — Media &amp; Footage</div>
+            <div class="section-label">08 — Media &amp; Footage</div>
             <h2>Visual Materials &amp; Recorded Output</h2>
 
             <!-- ── AV Production ─────────────────────────────────────── -->
@@ -2040,12 +2467,13 @@
                 </div>
             </div>
         </div>
+        </div>
     </section>
 
-    <!-- ── 08 — Repositories ────────────────────────────────────────── -->
+    <!-- ── 09 — Repositories ────────────────────────────────────────── -->
     <section id="repos">
         <div class="container">
-            <div class="section-label">08 — Repositories</div>
+            <div class="section-label">09 — Repositories</div>
             <h2>System Architecture<br>Across three Repos</h2>
             <p>
                 The project is structured as three independent repositories, each with a clearly
@@ -2055,14 +2483,15 @@
             <div class="repos reveal">
                 <a class="repo-row" href="https://github.com/Muhannad7794/VP_AR_full_System" target="_blank">
                     <div class="repo-name">VP_AR_full_System</div>
-                    <div class="repo-desc">Offline pipeline: temporal alignment, spatial calibration,
-                        kinematic extraction and 1 Euro filtering. This page.</div>
+                    <div class="repo-desc">Offline pipeline: frame extraction, temporal alignment, spatial
+                        calibration and validation, kinematic extraction and 1 Euro filtering, occlusion
+                        (depth gating) validation. This page.</div>
                     <div class="repo-arrow">→</div>
                 </a>
                 <a class="repo-row" href="https://github.com/Muhannad7794/VP_AR_full_System_runtime" target="_blank">
                     <div class="repo-name">_runtime</div>
-                    <div class="repo-desc">UE5 C++ runtime: camera tracking, Composure, depth occlusion,
-                        EI descriptor components, Niagara, mode switching.</div>
+                    <div class="repo-desc">UE5 runtime: camera tracking, Composure, depth reprojection (HLSL)
+                        and occlusion, EI descriptor components, Niagara, mode switching.</div>
                     <div class="repo-arrow">→</div>
                 </a>
                 <a class="repo-row" href="https://github.com/Muhannad7794/vp_baseFree_tracking" target="_blank">
@@ -2075,10 +2504,10 @@
         </div>
     </section>
 
-    <!-- ── 09 — References ──────────────────────────────────────────── -->
+    <!-- ── 10 — References ──────────────────────────────────────────── -->
     <section id="references">
         <div class="container">
-            <div class="section-label">09 — References</div>
+            <div class="section-label">10 — References</div>
             <h2>Theoretical &amp; Technical Grounding</h2>
             <div class="refs">
                 <div class="ref">

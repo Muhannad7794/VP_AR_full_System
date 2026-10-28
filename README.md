@@ -1,340 +1,397 @@
-# How to Control the System using CMD
+# VP_AR_full_System — Offline Pipeline
+
+This repository holds the **offline analysis and calibration pipeline** of a base-free virtual production and augmented reality (VP/AR) system. The system films a performer with a **Sony ZV-E10 II** (the production camera) and uses a **ZED 2i** stereo camera mounted on the same rig as camera tracker, motion-capture sensor and depth sensor. A **Jetson AGX Orin** on the rig runs the ZED; **Unreal Engine 5** on a workstation composites CG elements into the Sony image in real time, so that real objects and people can hide CG objects (occlusion) and CG can react to the performer's movement.
+
+The real-time side lives in [`VP_AR_full_System_runtime`](https://github.com/Muhannad7794/VP_AR_full_System_runtime). This repository produces the numbers that the real-time system depends on, and the evidence that those numbers are correct:
+
+| Service | Question it answers | Main result |
+|---|---|---|
+| **Extraction** | What did each camera record, and when? | Frames, depth, confidence, per-frame timestamps |
+| **Temporal alignment** | Which ZED frame was taken at the same moment as each Sony frame? | Frame mapping and synchronised dataset |
+| **Spatial alignment** | Where is the Sony camera relative to the ZED, and what are its lens properties? | Calibration values for Unreal Engine, with validation |
+| **Kinematics** | How noisy is the ZED skeleton, and how well does the 1 Euro filter clean it? | Filtered joint trajectories, movement metrics |
+| **Occlusion refinement** | Which ZED depth pixels are unreliable, and where? | Confidence-gating statistics and maps |
+
+Every service runs inside the same GPU Docker image and writes its plots to `data/plots/<dataset>/`. The figures in this README are examples of those plots, with an explanation of how to read each one.
+
+---
+
+## Contents
+
+- [Getting Started](#-getting-started)
+- [Recording a Dataset](#-recording-a-dataset)
+- [Phase 1: Frame Extraction](#-phase-1-frame-extraction)
+- [Phase 2: Temporal Alignment](#%EF%B8%8F-phase-2-temporal-alignment)
+- [Phase 3: Spatial Alignment](#-phase-3-spatial-alignment)
+- [Phase 4: Kinematic Extraction and Filtering](#-phase-4-kinematic-extraction-and-filtering)
+- [Phase 5: Embodied Interaction — Kinematic AR](#-phase-5-embodied-interaction--kinematic-ar)
+- [Phase 6: Occlusion Refinement](#-phase-6-occlusion-refinement)
+- [Related Repositories](#-related-repositories)
+- [Output Reference](#output-reference)
+- [Directory Structure](#directory-structure)
+
+---
 
 ## 🚀 Getting Started
 
-**Step 1: Build the Environment**
+### Requirements
 
-Clone this repository to your local machine, open your terminal in the root folder, and build the GPU-accelerated Docker container. This only needs to be done once.
+- An NVIDIA GPU with a driver that supports **CUDA 12.8 or newer**: the "CUDA Version" shown by `nvidia-smi` must be 12.8 or higher.
+- Docker with GPU support: Docker Desktop with the WSL 2 backend on Windows, or Docker Engine with the NVIDIA Container Toolkit on Linux.
+- Internet access during the build: the ZED Python API is downloaded from Stereolabs.
 
+### Build the image
+
+All services share one image, `vp_ar_full_system:zed5.2`, based on `stereolabs/zed:5.2.3-devel-cuda12.8-ubuntu22.04`. The ZED SDK version matches the Jetson that records the SVO files, because an SVO written by a newer SDK may not open with an older one. The image is built once, by the `extract` service:
+
+```bash
+docker compose build extract
 ```
-docker compose build --no-cache
-```
-**Step 2: Prepare Your Raw Data**
-1. Create a new folder inside data/raw/ with a descriptive name for your recording session (e.g., <dataset name>).
 
-2. Drop your raw video files into that folder:
-- One mp4 file.
-- One svo file.
+### Run a service
+
+| Service | Runs | Mounted into the container |
+|---|---|---|
+| `extract` | `run_extract.sh` | `extract_frames.py`, `run_extract.sh`, `data/` |
+| `sync` | `run_temporal.sh`, `check_svo.py` | `temporal_alignment/`, `run_temporal.sh`, `data/` |
+| `align` | `run_spatial.sh` | `spatial_alignment/`, `run_spatial.sh`, `data/` |
+| `filter` | `run_filtering.sh` | `skeleton_filtering/`, `run_filtering.sh`, `data/` |
+| `occlusion` | `run_occlusion.sh` | `occlusion_refinement/`, `run_occlusion.sh`, `data/` |
+
+```bash
+docker compose run --rm <service> ./<runner>.sh <dataset name>
+```
+
+The code folders are mounted, not copied, so changes to a script take effect without rebuilding the image. A persistent volume (`zed_resources`) keeps the optimised ZED depth model between runs, so it is not re-optimised in every new container.
+
+> Run the pipeline inside the containers, not in a local Python environment: OpenCV, NumPy 2 and the ZED Python API are only installed in the image.
+
+---
+
+## 🎥 Recording a Dataset
+
+A dataset is one recording session: a ZED **SVO2** file recorded on the Jetson and a Sony **MP4** recorded through the capture card (OBS, constant frame rate). Put both in `data/raw/<dataset name>/`. If the session was recorded with the Jetson recorder (`record_zed_svo.py`), copy its logs (`<name>_timestamps.csv`, `_events.csv`, `_board.csv`, `_settings.json`) into the same folder; the extraction checks the SVO against them.
+
+The recording protocol is what makes the offline pipeline reliable:
+
+1. **Cover both lenses at the start and at the end** with an opaque card for 1 to 2 seconds. The dark periods are visible in both cameras and mark the moment the recording becomes usable (Phase 2).
+2. **For calibration datasets, hold the ChArUco board still for 1 to 2 seconds in each pose.** Moving boards are blurred and are rejected. Cover the whole Sony frame (centre, edges, corners), at several distances (about 0.6 m to 1.5 m) and tilts (up to about 30°).
+3. **Use manual exposure on the ZED** (short exposure time, less motion blur). The recorder sets exposure, gain and white balance explicitly and shows the live board detection and an outline of the Sony frame in a browser preview.
+4. **Measure the printed board.** Printers scale pages slightly. The square length sets the metric scale of the whole calibration (Phase 3.2).
+
+---
 
 ## 🧩 Phase 1: Frame Extraction
-Once your raw files are in place, run the extraction pipeline with a single command.
-Replace <dataset name> with the exact name of the dataset:
 
+```bash
+docker compose run --rm extract ./run_extract.sh <dataset name>
 ```
-docker compose run --rm sync ./run_extract.sh <dataset name>
+
+**What this does**
+
+- Decodes the SVO with the ZED SDK and saves, per frame, the **rectified left image**, the **depth map** (16-bit millimetres, 0 = no depth) and the **confidence map** (1 = most reliable, 100 = least reliable).
+- Decodes the MP4 and saves every Sony frame.
+- Records the **timing** of every frame: the ZED camera timestamp from the SVO and the Sony container time. Gaps in the ZED timestamps reveal frames the camera dropped during recording.
+- Computes two cheap signals for every frame on a 160 × 90 grey version of the image: **luma** (average brightness) and **motion** (average change from the previous frame). Phase 2 aligns the two cameras with these signals.
+- Saves the **rectified ZED intrinsics** of the session, the exact lens model of the saved ZED frames and depth maps.
+- When the recorder logs are present, compares the number of frames and the timestamps of the SVO with the log.
+
+Options: `--skip N` saves every N-th frame (signals are still computed for every frame), `--disable-self-calib` turns off the ZED's automatic recalibration while decoding.
+
+**Checking an SVO file before extraction**
+
+```bash
+docker compose run --rm sync python3 temporal_alignment/check_svo.py --dataset <dataset name> [--full]
 ```
-**What This Does:**
-- Extracts the RGB video into individual RGB .PNG files.
-- Extracts the SVO data into individual frames of 3 types: depth, confidence, and RGB.
-- Saves the extracted frames into data/extracted/<dataset name>/.
+
+Checks that the SVO opens with the installed SDK, that it holds as many frames as the recorder logged, and that frame *k* carries the timestamp of log row *k*. `--full` decodes every frame.
+
+---
 
 ## ⏱️ Phase 2: Temporal Alignment
-Once your raw files are in place, run the entire extraction and syncing pipeline with a single command.
 
-Replace <dataset name> with the exact name of the dataset:
-
-```
-docker compose run --rm sync ./run_temporal.sh <dataset name>
-```
-**What This Does:**
-- Extracts a feature vector from every frame using a pre-trained ResNet18 network (`sync_frames.py`).
-
-- Aligns the two frame sequences in time using FastDTW (an approximate Dynamic Time Warping) with cosine distance between the feature vectors.
-
-- Removes local jitter from the mapping with a median filter (`smooth_frames_mapping.py`, default window of 31 frames). The filter suppresses jitter; it does not model clock drift.
-
-- Copies the aligned frames into data/synced/<dataset name>/. See [2.1 Known Limits and the Valid Frame Window](#21-known-limits-and-the-valid-frame-window) before using the full range of a dataset.
-
-**Temporal Drift Result — dataset_04:**
-
-![Drift Comparison](data/plots/dataset_04/drift_comparison.jpg)
-
-> The blue curve shows the raw frame-to-frame offset detected by DTW. The orange curve is the median-filtered mapping that is actually applied when copying synced frames. The close overlap shows that the filter changed the DTW result very little in dataset_04.
-
-**Output: `frame_mapping.json`** — raw DTW alignment mapping from Sony frame index to ZED frame index:
-
-```json
-{
-  "1": 1,
-  "2": 2,
-  "3": 34,
-  "10": 41,
-  "50": 88,
-  "100": 137,
-  "500": 536,
-  "1000": 1039
-}
+```bash
+docker compose run --rm sync ./run_temporal.sh <dataset name> [sync_frames.py options]
 ```
 
-> Each key is a Sony frame number; the value is the ZED frame that was closest in visual content at that moment. Gaps or jumps (e.g., `"3": 34`) reflect hardware clock desync that DTW has corrected.
+### The problem
 
-**Output: `smoothed_frame_mapping.json`** — median-filtered version of the same mapping:
+The two cameras record on separate machines with separate clocks, and they do not start at the same moment. The ZED records at about 29.86 frames per second and occasionally drops a frame; the Sony recording has an exact, constant 30 frames per second. To compare a Sony frame with ZED data (depth, board corners, skeleton), the pipeline must know which ZED frame was taken **at the same instant**.
 
-```json
-{
-  "1": 39,
-  "2": 40,
-  "3": 41,
-  "10": 48,
-  "50": 88,
-  "100": 138,
-  "500": 537,
-  "1000": 1039
-}
+### The method
+
+Each camera has its own time axis: the ZED timestamps from the SVO, and frame number ÷ 30 for the Sony. Both clocks run in real time, so the two axes differ by a constant **offset** *b*:
+
+```
+t_zed = t_sony + b
 ```
 
-> The smoothed mapping removes high-frequency jitter from the raw DTW output. These are the ZED frame indices actually used when writing files to `data/synced/`.
+The offset is measured in two independent ways, and the two results must agree:
+
+1. **Cover events.** The card over the lenses makes both images dark. The edges of the dark periods are timed in both recordings and compared.
+2. **Motion correlation.** The motion signal of both cameras (how much the image changes from frame to frame) is compared at every possible offset. The offset at which the two signals match best is the time difference. This uses thousands of frames and is the more precise estimate.
+
+The pipeline then checks whether the offset **drifts** over the recording (one clock running slightly faster than the other) by measuring it again in 40-second windows. Drift is corrected only when it is significant. Finally, every Sony frame is paired with the ZED frame closest in time. Pairs further apart than 0.6 of a frame (a ZED frame was dropped) and frames inside the dark periods are excluded. Only the **active window** between the two cover events goes into the synchronised dataset.
+
+| Step | Script | Output |
+|---|---|---|
+| 1/4 | `sync_frames.py` | `frame_mapping.json`, `frame_mapping_full.json`, `frame_mapping_detail.csv`, `sync_report.json`, plots in `data/plots/<dataset>/sync/` |
+| 2/4 | `smooth_frames_mapping.py` | `smoothed_frame_mapping.json`, `drift_comparison.jpg` |
+| 3/4 | `compare_mappings.py` | `data/txt_output/<dataset>/mapping_comparison.txt` |
+| 4/4 | `compile_dataset.py` | `data/synced/<dataset>/` and `synced_index.csv` |
+
+Useful options of `sync_frames.py`: `--window START END` sets the active window by hand (Sony seconds), `--offset-source events|motion` or `--offset S` forces the offset, `--max-dt-ms` changes the pairing limit, `--method dtw` runs the earlier image-similarity method (ResNet18 features with FastDTW) for comparison.
+
+### Result — dataset_05
+
+| Quantity | Value |
+|---|---|
+| Sony | 8,919 frames, 297.3 s, 30.00 fps (1 repeated frame) |
+| ZED | 8,938 frames, 302.1 s, 29.86 fps, 93 frames dropped in 24 gaps |
+| Offset *b* | −1682.8 ms (motion correlation, r = 0.987) |
+| Drift | 56 ± 21 ppm, 13.5 ms over the recording: below the significance limit, not applied |
+| Active window | Sony 19.90 s to 283.34 s |
+| Mapped pairs | 7,817 (86 Sony frames without a ZED frame within 20 ms, caused by dropped ZED frames) |
+| Pairing residual | median 8.5 ms, maximum 19.5 ms |
+
+### Plots
+
+**Luma and cover events** — `sync/sync_luma.png`
+
+![Luma and cover events](docs/assets/temporal/sync_luma.png)
+
+> The average brightness of every frame over time, for the Sony and for the ZED (the ZED curve shifted by the measured offset). The grey bands are the dark periods where the lenses were covered; the green dashed lines mark the active window. When the offset is correct, the two curves rise and fall together over the whole recording, so this plot is the first visual check of the synchronisation.
+
+**Motion correlation** — `sync/sync_correlation.png`
+
+![Motion correlation](docs/assets/temporal/sync_correlation.png)
+
+> How well the two motion signals match (correlation *r*, 1 = identical) for every candidate offset. Left: a coarse search over ±30 s finds one clear peak. Right: a fine search around that peak in 0.5 ms steps; the red line is the measured offset. A single high, narrow peak (here r = 0.987, the next-best candidate only 0.62) means the offset is unambiguous.
+
+**Drift check** — `sync/sync_drift.png`
+
+![Drift check](docs/assets/temporal/sync_drift.png)
+
+> The offset measured separately in 40-second windows along the recording, relative to the global offset. If one clock ran faster, the points would form a slope. The green band is ±half a Sony frame: as long as the points stay inside it, a single constant offset pairs every frame correctly. The red line is the fitted drift; its label says whether it was applied.
+
+**Pairing residuals** — `sync/sync_residuals.png`
+
+![Pairing residuals](docs/assets/temporal/sync_residuals.png)
+
+> For every mapped Sony frame, the time difference between the moment it was taken and the ZED frame it was paired with. The ZED records slightly slower than 30 fps, so the difference sweeps evenly between 0 and about half a frame (±17 ms), and no pair exceeds the 20 ms limit.
+
+**Frame offset over the recording** — `drift_comparison.jpg`
+
+![Drift comparison](docs/assets/temporal/drift_comparison.jpg)
+
+> The difference between the Sony frame number and the paired ZED frame number. It grows steadily because the ZED records slightly fewer frames per second, and it jumps where the ZED dropped frames. The red curve is the median-filtered mapping that is compiled into `data/synced/`. With the time-based method the mapping only ever increases, and a median filter leaves such a sequence unchanged, so the two curves coincide. The filter matters only for the legacy DTW method, whose mapping jitters.
+
+### 2.1 Known limits and the valid frame window
+
+- The time-based method needs **one shared event visible to both cameras** (the cover events) or enough scene motion for the correlation. A recording of a static scene without cover events cannot be aligned.
+- Only the **active window** between the first and last cover event is compiled. The mapping of the whole overlap is kept in `frame_mapping_full.json`. Without cover events, `--allow-full-overlap` uses the whole overlap as the window, or `--window START END` sets it by hand.
+- **Dropped ZED frames are excluded, not interpolated.** The 86 Sony frames without a ZED partner in dataset_05 are missing from `data/synced/`.
+- The Sony time axis assumes the MP4 has a **constant frame rate**. Check with `ffprobe` when another recorder is used.
 
 ---
 
 ## 📐 Phase 3: Spatial Alignment
-Once the cameras are matched in time, the system calculates the optical and geometric relationship between the two cameras. This is a two-step process: curating frames, then running the calibration pipeline.
 
-###  3.1 Record a Calibration Dataset
-Before picking frames, record a dedicated calibration clip using the ChArUco board:
-
-- Use the board printed from calib_io_charuco_200x150_8x11_15_11_DICT_4X4.pdf (A3 print, mounted flat on rigid cardboard).
-- Hold the board 0.5 m to 1.2 m from both cameras simultaneously — this is critical for ZED detection.
-- Move the board to cover all four corners of the frame, all four edges, and the center.
-- At each position, tilt the board left, right, and toward the camera (~30° angles).
-- Record for 3–4 minutes. Run Phase 1 on this recording to get synchronized frames.
-
-
-###  3.2 Pick the Best Frames
-Do not feed thousands of frames into the spatial calibrator. The algorithm requires a curated set of 30 to 50 perfect frame pairs with geometric diversity.
-The Golden Rule: Every frame must show the ChArUco board razor-sharp with zero motion blur.
-Open data/synced/<dataset>/sony_rgb/ and select frames covering these four categories:
-
-- Edges (10 frames): Board flat and facing both cameras, positioned at the top, bottom, left, right, and four corners of the frame.
-- Angles (10 frames): Board near center but heavily tilted backward, forward, left, and right (~30°).
-- Depths (10 frames): Board at 0.5 m (close) and 1.0–1.2 m (medium), 5 frames each.
-- Rotations (10 frames): Board flat but rotated clockwise and counter-clockwise like a steering wheel.
-
-**The Copying Workflow:**
-- Identify a good Sony frame (e.g., 00450.png) and copy it to data/picked_for_alignment/<dataset>/sony_rgb/.
-- Find the exact same frame number in data/synced/<dataset>/zed_rgb/ and copy it to data/picked_for_alignment/<dataset>/zed_rgb/.
-- Repeat until you have 30–50 matched pairs in both folders.
-
-###  3.3 Run the Spatial Calibrator
-Once you have your curated set of frames, run the spatial calibration pipeline:
+```bash
+docker compose run --rm align ./run_spatial.sh <dataset name> [zed_intrinsics.json] [--sony-model NAME] [--from-step N] [--square-mm MM]
 ```
-docker compose run --rm align ./run_spatial.sh <dataset name>
-```
-**What This Does:**
+
+### The problem
+
+The ZED measures depth from its own position, but the CG is shown in the Sony image. To use a ZED depth value in the Sony image, the system must know:
+
+- the **intrinsics** of each camera: focal length *f* (how strongly the lens magnifies, in pixels) and principal point *(cx, cy)* (the pixel where the optical axis meets the image);
+- the **extrinsics**: the rotation *R* and translation *T* that move a point from the ZED's coordinate frame into the Sony's (`X_sony = R · X_zed + T`).
+
+These are measured with a **ChArUco board**: a checkerboard with coded markers, so that every corner can be identified even when part of the board is hidden. Because the size of the board is known, every view gives a set of corners whose 3D positions are known and whose 2D positions are detected in the image.
+
+### 3.1 How the pipeline is built
+
+The pipeline is designed so that errors cannot hide inside each other:
+
+- **The ZED intrinsics are not estimated.** The ZED SDK rectifies every image onto a virtual distortion-free camera and computes depth on the same grid, so its intrinsics are read from the SDK and used as they are.
+- **The Sony intrinsics are estimated from Sony frames alone,** where the board can also be close to the camera or at the edges of the frame that the ZED does not share.
+- **The extrinsics are solved with both cameras' intrinsics fixed.** Six unknowns remain, so an error in a focal length cannot be absorbed into the rotation and translation.
+- **Every result is tested on views it was not fitted on** (held-out views), and against the ZED's own depth measurement.
+
+A **hold** is a run of consecutive frames in which the board is still (the board corners move less than 1.5 Sony pixels between frames). Each hold contributes at most one view, so a long pause in one pose does not count many times. Views are ordered by **diversity** (position in the frame, distance, tilt), and every fourth view is held back for testing, so that both sets span the whole recording.
+
+| Step | Script | What it does |
+|---|---|---|
+| 0 | `print_zed_intrinsics.py` | Reads the rectified ZED intrinsics from the SDK |
+| 1 | `inspect_detections.py` | Detects the board in every synced frame and marks usable and still frames |
+| 2 | `calibrate_sony_intrinsics.py` | Fits the Sony lens, compares distortion models on held-out views |
+| 3 | `pick_frames.py` | Selects diverse stereo pairs, splits them into calibration and held-out sets |
+| 4 | `stereo_calibrate.py` | Solves *R* and *T*, with outlier rejection and a bootstrap uncertainty |
+| 5 | `validate_calibration.py` | Tests the calibration on held-out pairs and through the ZED depth |
+| 6 | `apply_calibration.py` | Prints the values for Unreal Engine |
+
+**Options**
+
+| Option | Effect |
+|---|---|
+| `zed_intrinsics.json` (2nd argument) | Use intrinsics written on the Jetson with `print_zed_intrinsics.py --live --out zed_live.json`, so the calibration uses exactly the live camera's values |
+| `--sony-model NAME` | Fix the Sony lens model (`pinhole`, `k1`, `k1_k2`, `k1_k2_tangential`, `k1_k2_k3_tangential`) instead of selecting it on held-out error. Use `pinhole` for a camera that corrects its lens distortion internally |
+| `--from-step N` | Start at step N and reuse earlier outputs |
+| `--square-mm MM` | Measured board square length in millimetres (overrides the value in `calib_common.py`) |
+
+### 3.2 The board
+
+| Property | Value |
+|---|---|
+| Layout | 11 × 8 squares (10 × 7 inner corners, 70 in total), legacy pattern |
+| Markers | ArUco `DICT_4X4_50`, marker length = 0.75 × square length |
+| Square length | **28.36 mm measured** (design value 28 mm; the print is 1.3 % larger) |
+
+Every distance the calibration reports inherits the square length. Measure the printed board across all 11 squares of one row with a steel ruler, divide by 11, and set the result with `--square-mm` or `MEASURED_SQUARE_MM` in `spatial_alignment/calib_common.py`. Changing it requires re-running from step 2. The validation reports a **scale check** that detects a wrong square length (3.5).
+
+### 3.3 Step 1 — Board detection
+
+Detects the board in every synced Sony and ZED frame. A view is **usable** when it has at least 15 corners and those corners span at least 25 % of the board area; a usable view is **still** when the board barely moved. Outputs: `detections.json.gz`, `detection_summary.json`.
+
+**Detection over the recording** — `spatial/detection_timeline.png`
+
+![Detection timeline](docs/assets/spatial/detection_timeline.png)
+
+> The number of board corners found in every frame (top: Sony, bottom: ZED), out of 70. Orange dots are usable frames in which the board moves; green dots are usable and still, the candidates for calibration. The red dashed line is the 15-corner minimum. In dataset_05 the Sony sees almost all corners throughout. The ZED loses corners in the second half, where the board is about 1.3 m away: the ZED's wider lens makes the board smaller in its image. The pipeline copes because it needs only a minimum number of well-spread corners, not the whole board.
+
+### 3.4 Step 2 — Sony intrinsics
+
+Fits five lens models, from a pure **pinhole** (no distortion) to five distortion coefficients, on 40 Sony views, and scores each on the held-out views. For dataset_05 the Sony model is fixed to `pinhole` (`--sony-model pinhole`). The camera corrects its lens distortion internally, and the models with distortion found a 14 % longer focal length (1537 to 1551 px instead of 1358 px): a known trade-off between focal length and distortion when the board covers only part of the frame. The pinhole focal length agrees with the optics (16 mm lens) and gives a ZED–Sony translation that matches a tape measurement.
+
+**Model comparison** — `spatial/sony_intrinsics_models.png`
+
+![Sony distortion models](docs/assets/spatial/sony_intrinsics_models.png)
+
+> The reprojection error of each lens model: how far, on average, the detected corners lie from where the fitted model predicts them. Light bars are the views used for fitting; dark bars are held-out views. A model that fits its own views much better than new views is overfitting. Here every model generalises (light and dark bars are close). The distortion models are about 0.2 px better than the pinhole, but at the cost of the unrealistic focal length described above.
+
+**Corner coverage** — `spatial/sony_intrinsics_coverage.png`
+
+![Sony intrinsics coverage](docs/assets/spatial/sony_intrinsics_coverage.png)
+
+> Every board corner used in this step, drawn at its position in the Sony image (green: calibration views, orange: held-out views). A lens model is only trustworthy where it has seen corners. Corners reaching the edges and corners of the frame are what constrain distortion and focal length.
+
+**Distortion left out at runtime** — `spatial/sony_runtime_displacement.png`
+
+![Sony runtime displacement](docs/assets/spatial/sony_runtime_displacement.png)
+
+> Unreal Engine's camera and the depth reprojection shader are pinhole cameras. This map shows, for every pixel, how far the selected lens model would place a point compared with that pinhole camera, which is the error the runtime accepts. With a distortion model it is zero at the centre and grows towards the corners. For dataset_05 the selected model *is* the pinhole, so the map is zero everywhere: the colour scale shows only floating-point rounding (10⁻¹³ px).
+
+### 3.5 Step 3 — Stereo pair selection
+
+Pairs frames in which **both** cameras see the board and the board is still, groups them into holds, and orders them by diversity. Dataset_05: 1,591 still pairs, 140 distinct poses, 40 for calibration and 100 held out, at 0.59 to 1.47 m and up to 31° tilt. The selected frames are copied to `data/picked_for_alignment/` and `data/picked_for_validation/`. Output: `pair_selection.json`.
+
+**Selected stereo pairs** — `spatial/pair_selection_features.png`
+
+![Pair selection features](docs/assets/spatial/pair_selection_features.png)
+
+> Each dot is one selected board pose (green: calibration, orange: held-out). Left: where the board centre was in the Sony image. Middle: distance from the ZED against tilt. Right: the direction in which the board faced. A good set spreads in all three panels. Distance matters most: errors in rotation and translation can only be told apart when the board was seen at several distances.
+
+### 3.6 Step 4 — Extrinsics
+
+Solves *R* and *T* with OpenCV's stereo calibration, with both cameras' intrinsics fixed. Pairs with an error far above the rest are removed once and the solve is repeated. A **bootstrap** (re-solving 200 times on random resamples of the pairs) gives the uncertainty. Output: `spatial_calibration.json`.
+
+| Quantity | dataset_05 |
+|---|---|
+| Stereo fit RMS | 1.189 px over 40 pairs |
+| Translation ZED → Sony | −7.50, −10.61, −5.58 cm (tape: −7.4, −10.5, −5.0 cm) |
+| Rotation | −2.41°, +0.78°, +0.24° (rotation vector) |
+| Bootstrap uncertainty | 0.3 / 0.3 / 0.2 mm, 0.025° |
+
+### 3.7 Step 5 — Validation
+
+The validation asks how well the calibration **predicts** new data, from the easiest test to the one the live system faces:
+
+| Measurement | Meaning | dataset_05 (calibration · held-out) |
+|---|---|---|
+| Sony alone (step 2) | Lens model fitted to Sony views; nothing from the ZED involved | 1.208 px held-out |
+| Stereo fit (step 4) | How well the solved geometry fits the views it was solved on | 1.189 px |
+| Sony floor | Best any calibration could reach on these corners: the board pose fitted to the Sony corners alone | 1.24 · 1.29 px |
+| Corner transfer | Board pose seen by the ZED, moved with *R* and *T*, drawn into the Sony image, compared with the Sony's detections | 1.87 · 2.00 px |
+| Excess over the floor | √(transfer² − floor²): the part added by the ZED-to-Sony chain | 1.40 · 1.53 px |
+| **End-to-end** | ZED depth at each corner, moved with *R* and *T*, drawn into the Sony image: the path the live system uses | **1.61 · 1.53 px** |
+
+All errors are in Sony pixels (1 px ≈ 0.7 mm at 1 m). Two **checks** accompany the numbers:
+
+- **Scale check:** the ratio between the ZED's measured depth and the board distance computed from the board's size. **1.0009** for dataset_05: the depth and the board agree within 0.1 %. With the design square length (28 mm) this ratio was 1.013, which revealed that the printed board was 1.3 % larger than designed.
+- **Runtime bias check:** the largest average offset of the end-to-end error in any distance band, the systematic shift visible along occlusion edges. **0.61 px** for dataset_05 (limit 1 px).
+
+The calibration is **graded on the excess over the floor**, because only that part can be improved by a better calibration: below 0.5 px Excellent, 1 px Good, 2 px Acceptable, otherwise Poor. Dataset_05 is graded **Acceptable**. The end-to-end error (1.53 px) is lower than the corner transfer error, which indicates that the board pose seen by the ZED (computed assuming a perfectly flat board) limits the corner-transfer test, rather than the calibration itself.
+
+**Reprojection error analysis** — `spatial/reprojection_error_analysis.png`
+
+![Reprojection error analysis](docs/assets/spatial/reprojection_error_analysis.png)
+
+> Left: how far each predicted corner landed from the detected corner, for all corners (green: calibration pairs, orange: held-out pairs). Right: the error of each pair as a bar, with a black dot for that pair's Sony floor. Where a bar is much taller than its dot, the ZED-to-Sony chain added error; where they are close, the error is already present in the Sony image itself (detection noise, lens model).
+
+**Error against distance** — `spatial/error_vs_distance.png`
+
+![Error against distance](docs/assets/spatial/error_vs_distance.png)
+
+> The error of each pair against how far the board was from the ZED. A: corner transfer; B: end-to-end through the ZED depth. A calibration error caused by a wrong translation grows towards the camera; a rotation error does not depend on distance. The error is largest at 0.6 m, where the board fills much of the frame and reaches the Sony's frame edges, and about 1 to 1.5 px at 1.3 m.
+
+**Signed bias against inverse distance** — `spatial/bias_vs_inverse_distance.png`
+
+![Bias against inverse distance](docs/assets/spatial/bias_vs_inverse_distance.png)
+
+> The average *direction* of the error of each pair (x: horizontal, y: vertical) against 1/distance. Random errors average out; a consistent shift points to a cause. A translation error shifts the image in proportion to 1/distance, so it appears as a **slope**; a rotation or principal-point error appears as a constant offset. The fitted line converts the slope into the implied translation error ("dT"). For dataset_05 the end-to-end slopes correspond to 0.1 to 0.4 mm, so the translation is effectively exact.
+
+**Depth scale check** — `spatial/depth_scale_check.png`
+
+![Depth scale check](docs/assets/spatial/depth_scale_check.png)
+
+> For each pair, the ZED's measured depth divided by the distance computed from the board's known size. 1.0 means the two agree. The points scatter within ±1 % around 1.0 at every distance, so the ZED depth and the calibration share the same scale. A ratio consistently away from 1.0 means either the board square length or the ZED depth scale is wrong; the validation then prints the square length that would make the two agree.
+
+**Error across the Sony frame** — `spatial/error_across_sony_frame.png`
+
+![Error across the Sony frame](docs/assets/spatial/error_across_sony_frame.png)
+
+> The error of every corner against its distance from the Sony's principal point (0 = image centre, about 1100 px = frame corner). The line is the average per band. The error stays near 1.7 px up to about 800 px from the centre and rises to about 3 px beyond, towards the frame corners. That rise is the lens distortion that the pinhole model leaves out, a known limit of the runtime camera model.
+
+**Corner coverage** — `spatial/corner_coverage_sony_rgb.png`, `spatial/corner_coverage_zed_rgb.png`
+
+| Sony | ZED |
+|:---:|:---:|
+| ![Sony corner coverage](docs/assets/spatial/corner_coverage_sony_rgb.png) | ![ZED corner coverage](docs/assets/spatial/corner_coverage_zed_rgb.png) |
+
+> Every corner of the selected stereo pairs, drawn at its position in each camera. The Sony coverage reaches the frame edges; the ZED coverage occupies the centre of the ZED image, because the ZED's wider lens sees the same board smaller and closer to its centre. This is expected: the calibration needs corners spread across the *Sony* frame, which is where the result is used.
+
+### 3.8 Step 6 — Values for Unreal Engine
+
+`apply_calibration.py --ue5` prints every value the real-time system needs. The Unreal Engine values derived from the calibration (dataset_05, W × H = 1920 × 1080):
+
+| Where in Unreal Engine | Value | How it is derived |
+|---|---|---|
+| Depth reprojection material: `Sony_FX/FY/CX/CY`, `ZED_FX/FY/CX/CY`, `R_Row0–2`, `T_Metres` | printed by step 6 | Directly from `spatial_calibration.json` (OpenCV camera frames, metres, pixels) |
+| `BP_TrackerAnchor` lens offset, location | X +6.12, Y +7.46, Z −10.33 cm | Sony optical centre in the ZED's Unreal axes (X forward, Y right, Z up) |
+| `BP_TrackerAnchor` lens offset, rotation | X (Roll) −0.254°, Y (Pitch) +2.404°, Z (Yaw) −0.780° | Sony orientation in the same axes |
+| CineCamera focal length | 16.475 mm (sensor width 23.3 mm, height 13.106 mm) | f_mm = f_x × sensor width ÷ W; 16:9 sensor height = width × H ÷ W |
+| SceneCapture2D FOV angle | 70.53° | 2 × atan(W ÷ (2 f_x)) |
+| CG principal-point shift (UV) | 0.0045806, 0.0043079 | ((W/2 − c_x) ÷ W, (H/2 − c_y) ÷ H) |
+
+The SceneCapture2D cameras that render the CG have no principal point setting, so the composite shifts its CG reads by the last row. The CG **depth** is read at the nearest whole texel of that shift, because blending depth between texels creates depths that do not exist.
+
+### 3.9 Legacy diagnostic
+
+`diagnose_detection.py` tries ArUco dictionary and board-size combinations on a few frames to identify an unknown board. It is not part of `run_spatial.sh`.
 
 ---
-
-**[1/5] `inspect_detections.py`** — Runs ChArUco detection on every frame. It filters the frames based on a detection threshold of 45 corners. It generate the following output directories:
-- data/inspected/<dataset>/sony_rgb/ => Contains the Sony frames that passed the detection thershold.
-- data/inspected/<dataset>/zed_rgb/ => Contains the ZED frames that passed the detection thershold.
-- data/plots/<dataset>/spatial/detection_check/ => saves annotated images with visualization of the detected corners and a label of the number of corners detected of all frames.
-
-**Example annotated detection frame — dataset_04:**
-
-![Detection Check Example](data/plots/dataset_04/spatial/detection_check/zed_02139.jpg)
-
-> The detection script is responsible for detecting and counting the ChArUco corners on the board in each frame. The overlay label shows the total corner count. Only frames exceeding 45 corners advance to calibration.
-
-**Output: `detection_summary.json`** — per-frame detection result for every input frame:
-
-```json
-{
-  "sony": [
-    {
-      "file": "00001.png",
-      "status": "rejected_no_markers",
-      "n_markers": 0,
-      "n_corners": 0
-    },
-    {
-      "file": "00014.png",
-      "status": "ok",
-      "n_markers": 36,
-      "n_corners": 47
-    },
-    {
-      "file": "00084.png",
-      "status": "ok",
-      "n_markers": 44,
-      "n_corners": 70
-    }
-  ],
-  "zed": [
-    {
-      "file": "02139.png",
-      "status": "rejected_few_markers",
-      "n_markers": 31,
-      "n_corners": 34
-    },
-    {
-      "file": "00014.png",
-      "status": "ok",
-      "n_markers": 31,
-      "n_corners": 52
-    }
-  ]
-}
-```
-
-> `status` is one of `"ok"` (passes threshold), `"rejected_few_corners"` (board visible but below 45 corners), or `"rejected_no_markers"` (No markers found at all).
----
-
-**[2/5] `stereo_calibrate.py`** — Runs individual camera calibration on each camera followed by full stereo calibration. Outputs data/json_output/<dataset>/spatial_calibration.json containing:
-
-- Intrinsic camera matrices (K) and distortion coefficients (D) for both cameras.
-- Extrinsic rotation matrix (R) and translation vector (T) from ZED to Sony coordinate space.
-- Ready-to-use UE5 LensOffset values in centimetres.
-
-**Output: `spatial_calibration.json`** —  Shows the full calibration result in this format:
-
-```json
-{
-  "meta": {
-    "dataset": "dataset_04",
-    "valid_pairs_used": 36,
-    "timestamp": "2026-05-05T14:27:43"
-  },
-  "sony_camera": {
-    "camera_matrix": [
-      [1949.24,    0.0,  908.71],
-      [   0.0, 1944.20, 577.85],
-      [   0.0,    0.0,    1.0 ]
-    ],
-    "distortion_coeffs": [[-0.1058, 1.4287, 0.0021, -0.0087, -2.6126]]
-  },
-  "zed_camera": {
-    "camera_matrix": [
-      [1110.11,    0.0,  973.99],
-      [   0.0, 1110.59, 597.22],
-      [   0.0,    0.0,    1.0 ]
-    ],
-    "distortion_coeffs": [[0.0804, -0.0177, 0.0188, 0.0001, 0.3439]]
-  },
-  "extrinsics": {
-    "rotation_degrees": [-0.33, 1.94, 0.35],
-    "translation_cm":   [-7.71, -10.36, -4.11],
-    "stereo_rms_px": 0.807
-  },
-  "ue5_offset": {
-    "X_cm": -7.706,
-    "Y_cm": -10.357,
-    "Z_cm": -4.107
-  }
-}
-```
-
-> `camera_matrix` is the 3×3 intrinsic matrix K: `[fx, 0, cx; 0, fy, cy; 0, 0, 1]`. `distortion_coeffs` follow the OpenCV radial-tangential model `[k1, k2, p1, p2, k3]`. `rotation_degrees` are the Rodrigues rotation converted to Euler angles. `ue5_offset` is a direct copy of `translation_cm` ready to paste into the UE5 Details panel.
-
----
-
-**[3/5] `pick_frames.py`** — An automation script that autmomates the selection process based on 2 criteria:
-- Number of corners detected (threshold of 45).
-- Spatial diversity (ensures a good spread of board positions and angles across the frame).
-- Applies Motion filter to only include frame coupling where the movment energy is very low, ensuring the board is perfectly still and sharp in both cameras.
-
-The script produces the following output directories:
-- data/picked_for_alignment/<dataset_name>//sony_rgb/ => Contains the Sony frames that passed the detection thershold and motion filter.
-- data/picked_for_alignment/<dataset_name>/zed_rgb/ => Contains the ZED frames that passed the detection thershold and motion filter.
-- data/plots/<dataset_name>/spatial/picked_for_alignment/ => saves annotated images with visualization of the detected corners and a label of the number of corners detected of all frames that passed the detection thershold and motion filter.
-
-**Example auto-picked frame — dataset_04:**
-
-![Picked Frame Example](data/plots/dataset_04/spatial/picked_for_alignment/sony_00084.jpg)
-
-> The annotation shows the corner count and confirms the board is sharp and stationary, with all 70 corners detected. This makes this frame example vaible to enter the calibration process.
----
-
-**[4/5] `validate_calibration.py`** — Computes per-frame reprojection errors and saves analysis plots to data/plots/<dataset_name>/spatial/. The overall RMS error should be below 0.5 px for excellent calibration. RMS value under 1.8 px are considered good. Calibrations between 1,8 and 2.5 px are acceptible, and anything above 2.5 px is flagged as poor calibration that should be redone with better frames.
-
-**Reprojection Error Analysis — dataset_04:**
-
-![Reprojection Error Analysis](data/plots/dataset_04/spatial/reprojection_error_analysis.png)
-
-> Per-frame mean reprojection error (bar chart) and the overall error distribution (histogram). Dataset_04 achieved a mean of **1.71 px** with no bad frames (0 frames above 2.5 px threshold) — rated **"Good"**.
-
-**Corner Coverage Heatmaps:**
-
-| Sony Camera | ZED Camera |
-|:-----------:|:----------:|
-| ![Sony Corner Coverage](data/plots/dataset_04/spatial/corner_coverage_sony_rgb.png) | ![ZED Corner Coverage](data/plots/dataset_04/spatial/corner_coverage_zed_rgb.png) |
-
-> These density maps show where ChArUco corners were detected across the image plane. Good spatial coverage (corners distributed across the full frame area) is essential for a well-conditioned calibration. Dataset_04 shows strong coverage across the full sensor area for both cameras.
-
-**Output: `validation_report.json`** — summary statistics and per-frame breakdown:
-
-```json
-{
-  "dataset": "dataset_04",
-  "n_frames_validated": 36,
-  "overall_mean_px": 1.713,
-  "overall_std_px": 0.981,
-  "percentile_95_px": 3.509,
-  "frames_good": 14,
-  "frames_warn": 19,
-  "frames_bad": 0,
-  "bad_frame_names": [],
-  "assessment": "Good",
-  "per_frame": [
-    {
-      "frame_pair": ["00084.png", "00084.png"],
-      "n_corners": 70,
-      "mean_error_px": 1.245,
-      "max_error_px": 3.110,
-      "std_error_px": 0.718,
-      "errors_px": [0.404, 0.382, 0.406, 0.376, "..."]
-    }
-  ]
-}
-```
-
-> `frames_good` = mean error < 1.0 px. `frames_warn` = between 1.0 and 2.5 px. `frames_bad` = above 2.5 px (triggers a redo warning). `errors_px` lists the per-corner reprojection error for every detected corner in that frame pair.
-
----
-
-**[5/5] `apply_calibration.py`** — Reads the calibration JSON and prints the final UE5 offset values directly to the terminal.
-
-The terminal output mirrors the `ue5_offset` block from `spatial_calibration.json`:
-
-```json
-{
-  "ue5_offset": {
-    "X_cm": -7.706,
-    "Y_cm": -10.357,
-    "Z_cm": -4.107
-  }
-}
-```
-
-> Tthese values can beplugged directly into the UE5 CineCamera actor so the FOV and viewing output exactly matches the physical camera. No unit conversion needed — the system outputs centimetres, which is the native unit UE5 expects for this field.
-
-### 3.4 Diagnostic Tools
-To validate the calibration, a custom validation pipeline is made to evaluate the calibration quality and point out any potentail issues.
-The pipleine can be run with the following command:
-```
-docker compose run --rm align python3 spatial_alignment/diagnose_detection.py --dataset <dataset name>
-```
-This tests all supported ArUco dictionary variants and board size combinations and identifies the working configuration.
 
 ## 🦴 Phase 4: Kinematic Extraction and Filtering
+
 With the cameras spatially calibrated, Phase 4 extracts the performer's 3D skeletal data from the ZED SVO recording, denoises each joint trajectory using the 1 Euro Filter, and computes the LMA Expansiveness metric as a proxy for the performer's use of kinesphere space.
 
-Run the full pipeline with a single command:
-
-```
+```bash
 docker compose run --rm filter ./run_filtering.sh <dataset name>
-```
-
-To target a specific joint and axis for the noise-reduction plot:
-
-```
 docker compose run --rm filter ./run_filtering.sh <dataset name> --joint <joint_name> --axis <x|y|z>
 ```
 
 Default: `--joint right_wrist --axis x`. Any of the 38 BODY_38 joint names are valid (e.g., `pelvis`, `left_wrist`, `right_knee`, `spine_2`).
-
-**What This Does:**
-
----
 
 **[1/2] `extract_kinematics.py`** — Opens the raw `.svo` file from `data/raw/<dataset>/` using the ZED SDK and runs the `HUMAN_BODY_ACCURATE` body tracking model in `BODY_38` format. For every frame where the pelvis root joint is confidently tracked, it writes one row of 3D world-space coordinates for all 38 joints to a CSV file.
 
@@ -348,72 +405,46 @@ The 38 joints extracted (BODY_38 format):
 frame_idx, pelvis_x, pelvis_y, pelvis_z, spine_1_x, spine_1_y, spine_1_z, ..., right_hand_pinky_1_x, right_hand_pinky_1_y, right_hand_pinky_1_z
 0,  -486.42,  375.43, 1715.04,  -569.30,  329.02, 1699.13, ...,  312.45, -88.12, 2198.30
 1,  -491.15,  379.24, 1714.81,  -601.54,  348.78, 1781.67, ...,  314.10, -87.55, 2201.77
-2,  -493.80,  381.10, 1715.22,  -605.21,  351.33, 1784.02, ...,  315.02, -86.91, 2203.44
 ```
 
-> Rows are only written for frames where the pelvis joint is not `NaN` — frames where the performer is fully out of frame are silently skipped. The `frame_idx` column matches the original ZED SVO frame number, not a sequential row counter.
+> Rows are only written for frames where the pelvis joint is not `NaN`; frames where the performer is fully out of frame are skipped. The `frame_idx` column matches the original ZED SVO frame number, not a sequential row counter.
 
----
+**[2/2] `validate_kinematics.py`** — Reads the raw CSV, applies the **1 Euro Filter** to denoise the target joint, computes the **LMA Kinesphere Expansiveness** metric frame by frame, and saves two diagnostic plots.
 
-**[2/2] `validate_kinematics.py`** — Reads the raw CSV, applies the **1 Euro Filter** to denoise the target joint, computes the **LMA Kinesphere Expansiveness** metric frame-by-frame, and saves two diagnostic plots.
+**1 Euro Filter parameters:** `fps` 30, `min_cutoff` 1.0 Hz, `beta` 0.05, `d_cutoff` 1.0 Hz.
 
-**1 Euro Filter parameters (hardcoded):**
+> The 1 Euro Filter is a low-pass filter whose cutoff frequency rises with the speed of the signal. `min_cutoff` controls jitter suppression at rest; lower values smooth more. `beta` controls how quickly the cutoff rises during fast movement; higher values reduce lag at the cost of some noise.
 
-```json
-{
-  "fps": 30,
-  "min_cutoff": 1.0,
-  "beta": 0.05,
-  "d_cutoff": 1.0
-}
-```
+**1 Euro noise reduction** — `kinematics/1Euro_noise_reduction_{joint}_{axis}.png`
 
-> `min_cutoff` (Hz) controls jitter suppression at rest — lower values smooth more aggressively. `beta` controls lag reduction during fast movement — higher values reduce lag at the cost of some noise passthrough. The current values (`min_cutoff=1.0`, `beta=0.05`) are tuned for ZED 2i body tracking at 30 fps.
+![1 Euro noise reduction, right wrist x](docs/assets/kinematics/1Euro_noise_reduction_right_wrist_x.png)
 
-**Plot 1 — 1 Euro Noise Reduction (`1Euro_noise_reduction_{joint}_{axis}.png`):**
+> Top (red): the raw ZED coordinate of the selected joint and axis over time. Bottom (blue): the same signal after the 1 Euro Filter, on the same scale. Read it in two places: where the joint is at rest, the filtered curve should be free of the fine jitter of the raw one; where the joint moves fast, the filtered curve should follow the raw one without a visible delay. Too much remaining jitter calls for a lower `min_cutoff`; a visible delay calls for a higher `beta`.
 
-Overlays the raw (red) and filtered (blue) coordinate signal for the selected joint and axis over time.
+![1 Euro noise reduction, spine_2 y](docs/assets/kinematics/1Euro_noise_reduction_spine_2_y.png)
 
-![1 Euro Noise Reduction — spine Y](data/plots/dataset_01/kinematics/1Euro_noise_reduction_spine_2_y.png)
+> The same comparison for the vertical axis of `spine_2`. The spine moves far less than a wrist, so a larger share of its raw signal is sensor noise, which makes the effect of the filter at rest easier to see.
 
-> The red signal is the raw ZED SDK output; the blue signal is the 1 Euro filtered output. The filter attenuates high-frequency jitter at rest while preserving sharp transients during ballistic limb movements. This comparison is the primary diagnostic for tuning `min_cutoff` and `beta`.
+**LMA expansiveness** — `kinematics/lma_expansiveness.png`
 
-**Plot 2 — LMA Expansiveness (`lma_expansiveness.png`):**
+![LMA expansiveness](docs/assets/kinematics/lma_expansiveness.png)
 
-Plots the maximum reach distance from `spine_2` to either wrist over time — a proxy for the performer's use of kinesphere space (Laban Movement Analysis).
+> The largest distance from `spine_2` to either wrist, over time, in millimetres: a proxy for how far the performer reaches into the space around the body (the *kinesphere* in Laban Movement Analysis). Peaks are wide reaching gestures; valleys are arms held close to the body. It is computed from the raw wrist positions to keep the full range of the gesture.
 
-![LMA Expansiveness](data/plots/dataset_01/kinematics/lma_expansiveness.png)
-
-> The y-axis is the Euclidean distance in mm from `spine_2` to the furthest wrist. Peaks correspond to large gestural reaches; valleys indicate arms held close to the body. This metric is computed from raw (unfiltered) wrist positions to preserve the full dynamic range of the gesture signal.
-The LMA Expansiveness metric and the filtered joint trajectories produced in Phase 4 serve as the analytical foundation for the Embodied Interaction layer described in Phase 4. 
-The 1 Euro Filter parameters validated here (`min_cutoff=1.0`, `beta=0.05`) are the same parameters applied at runtime inside the UE5 C++ component to denoise the live ZED skeletal stream before descriptor computation.
+The 1 Euro Filter parameters validated here are the same parameters applied at runtime inside the Unreal Engine C++ component that denoises the live ZED skeleton.
 
 ---
 
 ## 🕺 Phase 5: Embodied Interaction — Kinematic AR
 
-Phase 5 extends the compositing pipeline into a live action-perception 
-coupling system. The performer's movement qualities — derived from the 
-filtered 38-joint skeletal stream — drive the behaviour of foreground CG 
-elements rendered in Unreal Engine 5. The system is grounded in Laban 
-Movement Analysis (LMA) and computes four continuous descriptors from the 
-live ZED body tracking data at 30 Hz.
+Phase 5 extends the compositing pipeline into a live action-perception coupling system. The performer's movement qualities, derived from the filtered 38-joint skeletal stream, drive the behaviour of foreground CG elements rendered in Unreal Engine 5. The system is grounded in Laban Movement Analysis (LMA) and computes four continuous descriptors from the live ZED body tracking data at 30 Hz. It is implemented in the runtime repository; this section summarises it.
 
-The Embodied Interaction layer operates in two switchable modes with no 
-level reload required:
+The Embodied Interaction layer operates in two switchable modes with no level reload required:
 
-- **Compositing Mode** — CG elements behave as depth-occluded compositing 
-  objects only. The stencil-based occlusion pipeline runs as normal. 
-  No interaction logic is active.
-- **Interactive Mode** — The full EI layer activates. CG elements respond 
-  to the qualitative character of the performer's movement in real time.
-
----
+- **Compositing Mode** — CG elements behave as depth-occluded compositing objects only. No interaction logic is active.
+- **Interactive Mode** — The full EI layer activates. CG elements respond to the qualitative character of the performer's movement in real time.
 
 ### 5.1 The Four LMA Descriptors
-
-The system computes four scalar values from the live ZED BODY_38 skeletal 
-stream each tick. Each corresponds to one of Laban's four Effort factors.
 
 | Descriptor | LMA Factor | Computation | Output Target |
 |---|---|---|---|
@@ -422,21 +453,11 @@ stream each tick. Each corresponds to one of Laban's four Effort factors.
 | **Weight** | Weight: Strong ↔ Light | Acceleration magnitude across key joints | MPC: WPO surface bend amplitude |
 | **Flow** | Flow: Free ↔ Bound | Rolling standard deviation of velocity delta | Niagara: attractor strength + MPC: surface noise scale |
 
-The force field distributes along the direction vector from `spine_2` to the 
-furthest wrist, not omnidirectionally. This means a forward arm thrust pushes 
-the CG grid forward; a lateral sweep pushes it laterally. The magnitude is 
-governed by the quality descriptors. The direction is read from body 
-orientation because, in LMA terms, directional intent is itself a spatial 
-quality — not a positional fact separate from it.
-
----
+The force field distributes along the direction vector from `spine_2` to the furthest wrist, not omnidirectionally: a forward arm thrust pushes the CG grid forward; a lateral sweep pushes it laterally. The magnitude is governed by the quality descriptors.
 
 ### 5.2 The Eight LMA Action Drives
 
-The four descriptors combine to produce the eight canonical LMA Action Drives 
-as continuous emergent regions rather than discrete classifications. The system 
-does not classify which drive is occurring; it positions the movement 
-continuously within the four-dimensional Effort space.
+The four descriptors combine to produce the eight canonical LMA Action Drives as continuous regions rather than discrete classes. The system positions the movement continuously within the four-dimensional Effort space.
 
 | Action Drive | Time | Weight | Space | Flow | CG Grid Response |
 |---|---|---|---|---|---|
@@ -449,79 +470,35 @@ continuously within the four-dimensional Effort space.
 | **Float** | Sustained | Light | Expanded | Free | Slow outward drift, gentle undulation, sparse particles |
 | **Glide** | Sustained | Light | Contracted | Bound | Tight stable formation, smooth surfaces, calm field |
 
----
-
 ### 5.3 CG Element Design — Particle Grid
 
-The demonstration scenario places the performer at the centre of a 
-three-dimensional grid of physics-simulated cubic objects in the LED volume. 
-The grid is permanently anchored to the performer's pelvis joint position 
-in world space, keeping the body at the centre of the formation regardless 
-of movement through the stage.
+The demonstration scenario places the performer at the centre of a three-dimensional grid of physics-simulated cubes in the LED volume, anchored to the performer's pelvis. The grid demonstrates all three technical pillars of the system at once:
 
-The grid simultaneously demonstrates all three technical pillars of the system:
-
-- **Compositing and occlusion**: cubes in front of the performer are correctly 
-  occluded by the depth comparison pipeline. Cubes behind the performer are 
-  hidden behind the body. A rotating camera continuously renegotiates these 
-  depth relationships in three dimensions.
-- **Embodied interaction**: cube surfaces deform and scatter in response to 
-  movement quality. The performer's expressive choices visibly transform the 
-  virtual environment around them.
-- **Perceptual legibility**: gaps between cubes keep the performer visible 
-  through the grid at all times, making both the compositing and the 
-  interaction readable in a single frame.
-
----
+- **Compositing and occlusion:** cubes in front of the performer cover the body; cubes behind are hidden by it. A moving camera continuously renegotiates these depth relationships.
+- **Embodied interaction:** cube surfaces deform and scatter in response to movement quality.
+- **Perceptual legibility:** gaps between cubes keep the performer visible, so compositing and interaction are readable in a single frame.
 
 ### 5.4 Runtime Architecture
 
-The EI runtime is implemented in the `VP_AR_full_System_runtime` repository 
-as two UE5 C++ Actor Components:
+**`UKinematicDescriptorComponent`** reads the live ZED LiveLink BODY_38 subject every tick, applies the 1 Euro Filter, computes the four LMA descriptors, runs the adaptive output curve (dead zone + saturation sigmoid), and writes the results to `MPC_KinematicAR` and the Niagara component.
 
-**`UKinematicDescriptorComponent`** — reads the live ZED LiveLink BODY_38 
-subject every tick, applies the 1 Euro Filter to suppress geometric sensor 
-noise, computes the four LMA descriptors, runs the adaptive output curve 
-(dead zone + saturation sigmoid), and writes the results to 
-`MPC_KinematicAR` and the Niagara component.
+**`UProximityDispatchComponent`** reads the pelvis position every tick and writes a normalised `PerformerProximity` value to each registered AR mesh, driving a contact deformation that is active in both modes.
 
-**`UProximityDispatchComponent`** — reads the pelvis joint position every 
-tick and writes a normalised `PerformerProximity` value to the Dynamic 
-Material Instance of each registered AR mesh actor. This drives a contact 
-deformation WPO effect that is active in both operating modes, ensuring 
-clean physical boundary behaviour at depth transitions even when the EI 
-layer is off.
-
-The Material Parameter Collection `MPC_KinematicAR` holds four scalar 
-parameters written at runtime:
-
-| Parameter | Written by | Controls |
+| `MPC_KinematicAR` parameter | Written by | Controls |
 |---|---|---|
 | `ExpansivenessLevel` | `UKinematicDescriptorComponent` | WPO deformation frequency, RadialForce radius |
 | `WeightLevel` | `UKinematicDescriptorComponent` | WPO surface bend amplitude |
 | `FlowLevel` | `UKinematicDescriptorComponent` | WPO surface noise scale |
 | `SystemMode` | `UProximityDispatchComponent::SetSystemMode()` | Gates WPO channels 2 and 3 in all AR materials |
 
-The Niagara system `NS_KinematicAR` exposes two User Parameters:
-
-| Parameter | Controls |
+| `NS_KinematicAR` user parameter | Controls |
 |---|---|
 | `User.EffortLevel` | Particle emission rate and initial velocity |
 | `User.FlowLevel` | Mutual attractor strength between grid cubes |
 
----
-
 ### 5.5 Smoothing Models as Artistic Parameters
 
-The adaptive smoothing system from Phase 4 (1 Euro Filter) handles geometric 
-sensor noise suppression on the raw joint stream. On top of this, the output 
-descriptors pass through a calibrated adaptive interpolation stage before 
-reaching the visual outputs. Three mapping models are available, selectable 
-at runtime via the `EAdaptiveModel` enum on the component.
-
-The choice of model is not purely technical — it defines the expressive 
-relationship between the performer and the AR environment, and corresponds 
-to distinct movement traditions:
+On top of the 1 Euro Filter, the output descriptors pass through an adaptive interpolation stage. Three mapping models are selectable at runtime via the `EAdaptiveModel` enum. The choice defines the expressive relationship between the performer and the AR environment:
 
 | Model | LMA Quality | Dance Tradition |
 |---|---|---|
@@ -533,57 +510,56 @@ to distinct movement traditions:
 
 ## 🎭 Phase 6: Occlusion Refinement
 
-Phase 6 improves the ZED depth map that decides where CG is hidden behind the performer. The depth map is produced on the Jetson, streamed to Unreal Engine over NDI, reprojected into the Sony camera view and compared with the CG depth in the compositing material. Errors in the depth map appear as CG showing through the performer (show-through) or as halos around the silhouette.
+### What occlusion is, and what can go wrong
 
-**Where each part runs**
+For every pixel of the Sony image, the composite must decide whether the real scene or the CG object is closer to the camera. The real distance comes from the ZED depth map; the CG distance comes from Unreal Engine. When the real surface is closer, the camera image is shown (the performer hides the CG); otherwise the CG is shown.
 
-| Part | Location | Role |
+Errors in the ZED depth map appear in two ways:
+
+- **Show-through:** CG visible on the performer, where the ZED's depth wrongly says "far".
+- **Halos and false cut-outs:** holes cut into CG around the performer, where unreliable pixels wrongly say "near". These concentrate along silhouettes, where the stereo matching cannot tell foreground from background.
+
+### The live pipeline (summary)
+
+| Stage | Where it runs | What it does |
 |---|---|---|
-| `zed_ndi_streamer.py` | Jetson | Retrieves ZED depth, applies the refinement, publishes NDI source `ZED_Depth_Stream` |
-| `M_ZED_DepthReproject` | UE5 | Reprojects the ZED depth map into the Sony camera view (custom HLSL node) |
-| `M_DepthOcclusionComposite` | UE5 | Compares reprojected ZED depth with CG depth and blends the CG over the Sony plate |
-| `occlusion_refinement/` | This repository | Offline validation of the refinement stages on recorded datasets |
+| Confidence gating | Jetson, `zed_ndi_streamer.py` | Removes depth pixels whose ZED confidence value is above the threshold (50); they are sent as an explicit "invalid" code |
+| Depth transport | Jetson → NDI → Unreal Engine | Depth encoded as 8-bit codes (0–235 = 0.5–6.0 m, 255 = invalid) |
+| Reprojection | Unreal Engine, `M_ZED_DepthReproject` | Moves the ZED depth into the Sony's viewpoint with the Phase 3 calibration, by walking along each Sony pixel's line of sight through the ZED depth map. Invalid pixels are skipped, and areas hidden from the ZED take the background depth behind them |
+| Median filter | Unreal Engine, own pass | 5 × 5 median of the reprojected depth: removes isolated speckles without moving edges |
+| Occlusion matte | Unreal Engine, `M_MatteEMA` | Depth comparison with a small bias towards CG, 1-pixel erosion of the real-world cut-out, and a temporal average |
+| Edge refinement | Unreal Engine, composite material | Feathering and image-guided snapping of the matte edge to edges in the Sony image |
 
-**Refinement stages and their status**
+Two findings from bringing this pipeline up on the rig shaped it:
 
-| Stage | Purpose | Status |
-|---|---|---|
-| 1. Confidence gating | Remove depth pixels the ZED marks as unreliable | Validated offline on dataset_01. Implemented in the streamer |
-| 1b. Hole fill | Replace removed pixels by the closest valid neighbouring depth, so a removed pixel does not become "far" | Implemented in the streamer. Behaviour on the rig is still to be validated |
-| 2. Guided filtering | Edge-preserving smoothing guided by the Sony image | Planned (online) |
-| 3. Segmentation-guided alpha refinement | Refine the occlusion edge using a performer mask | Planned (online) |
-| 4. Confidence-weighted temporal smoothing | Reduce frame-to-frame flicker | Planned (online) |
-| 5. Morphological polish | Remove small speckles and holes in the final mask | Planned (online) |
+- **The NDI depth texture is treated as a colour image.** Unreal Engine marks NDI video textures as sRGB and converts every value with the sRGB-to-linear curve when it reads them. For depth codes this compresses all distances towards the camera (2.0 m was read as about 0.8 m), so the reprojection over-corrected the parallax between the two cameras. The reprojection shader now converts the values back. With the correct depth, the depth silhouette lands on the performer in the Sony image, and most edge artefacts disappear.
+- **A hole-fill stage was removed.** Filling invalid pixels with the nearest valid depth was useful while the reprojection streaked at invalid pixels. Once the reprojection skipped invalid pixels and decoded depth correctly, the fill only enlarged the performer's cut-out at every hole and made the edges flicker.
 
-Stages 2 to 5 are not implemented. Offline versions would need frame-accurate pairing between the Sony and ZED frames (see [2.1](#21-known-limits-and-the-valid-frame-window)), so the current plan is to build them in the live path only.
+### 6.1 The offline service: confidence-gating validation
 
----
-
-### 6.1 Offline Validation of Stage 1
-
-```
-docker compose run --rm occlusion ./run_occlusion.sh <dataset name>
+```bash
+docker compose run --rm occlusion ./run_occlusion.sh <dataset name> [options]
 ```
 
-Options of `occlusion_refinement/validate_occlusion.py`:
+The ZED SDK gives every depth pixel a **confidence value** from 1 (reliable) to 100 (unreliable). The gate removes every pixel above a threshold. This service measures, on a recorded dataset, **how many pixels the gate removes, where, and how that changes with scene motion**, before the threshold is used live. It reads the synced `zed_depth` and `zed_confidence` frames, so it runs after Phases 1 and 2.
 
 | Option | Default | Meaning |
 |---|---|---|
 | `--confidence-threshold` | 50 | Pixels with a confidence value above this are removed (lower value = more reliable pixel) |
 | `--trim-start` | 1000 | Frames excluded from the start of the dataset |
 | `--trim-end` | 1000 | Frames excluded from the end of the dataset |
-| `--sample-count` | 12 | Number of sample frames selected by amount of scene motion |
+| `--sample-count` | 12 | Number of sample frames, chosen to span slow to fast scene motion |
 | `--frames` | none | Extra frame indices to include as samples |
 
-The first and last frames of a recording show the performer operating the cameras, so they are excluded from every statistic, plot and sample. For dataset_01 the analysed range was frames 400 to 6049.
+The first and last frames of a recording show the performer walking to and from the cameras, so they are excluded from every statistic, plot and sample.
 
-**What This Does:**
-- Reads the synced `zed_depth` and `zed_confidence` frames of the analysed range.
-- Applies the confidence gate and records, per frame, the share of valid depth pixels that the gate removes.
-- Computes a scene motion value per frame (mean absolute depth change against the frame 5 frames earlier) and selects sample frames spread from slow to fast movement.
-- Saves the plots, sample figures and a JSON report listed below.
+**What it computes**
 
-**Result on dataset_01** (confidence threshold 50, frames 400 to 6049):
+- **Removal rate** per frame: pixels removed by the gate ÷ pixels that have a depth value. Pixels without depth are left out, because the gate cannot remove what is already missing.
+- **Scene motion** per frame: the average depth change, in millimetres, against the frame 5 frames earlier. It shows whether removal follows movement, and it chooses sample frames from slow to fast movement.
+- **Removal frequency** per pixel: in how many of the analysed frames each pixel was removed. It separates persistent removals (static scene edges) from removals that move with the performer.
+
+### Result — dataset_01 (threshold 50, frames 400 to 6049)
 
 | Statistic | Value |
 |---|---|
@@ -591,8 +567,6 @@ The first and last frames of a recording show the performer operating the camera
 | Median | 0.54 % |
 | Maximum | 1.93 % (frame 1111) |
 | Empty-room baseline (static furniture edges) | about 0.42 % |
-
-Mean removal by section of the recording:
 
 | Frames | Mean removed | Note |
 |---|---|---|
@@ -603,9 +577,27 @@ Mean removal by section of the recording:
 | 3000 to 4700 | 0.59 % | |
 | 4700 to 6049 | 0.52 % | |
 
-The removed pixels concentrate on silhouette edges, in the gaps between the arms and the torso, and in a few regions on the body that repeat at the same locations over time. Because those regions repeat, a temporal hold cannot fill them, and the fill has to come from the surrounding pixels of the same frame (Stage 1b).
+The removed pixels concentrate on silhouette edges, in the gaps between the arms and the torso, and in a few regions on the body that repeat at the same locations over time. On the live rig, the same threshold raises the share of pixels without depth from about 6 % (SDK default threshold 95) to 10–12 %, and removes the false "near" pixels that cut holes into the CG.
 
-**Limits of this metric.** The share of removed pixels is a proxy for show-through incidence. It shows that the gate targets the right pixels. It does not measure how often CG is actually composited incorrectly, which needs the live compositor. The occlusion edge error is not computed because it depends on Stages 2 and 3.
+### Plots
+
+**Removal rate and scene motion** — `occlusion/confidence_gating_rejection_rate.png`
+
+![Confidence gating rejection rate](docs/assets/occlusion/confidence_gating_rejection_rate.png)
+
+> Top: the share of depth pixels the gate removed in each frame; the dashed line is the mean. Bottom: how much the scene moved in each frame. The numbered dotted lines mark the frames shown as sample figures. When the removal rate rises together with the motion, the gate is reacting to the performer (moving silhouettes, motion blur) rather than to the static room.
+
+**Where pixels are removed** — `occlusion/rejection_frequency_map.png`
+
+![Rejection frequency map](docs/assets/occlusion/rejection_frequency_map.png)
+
+> Every pixel coloured by the share of analysed frames in which it was removed. Dark red lines (close to 100 %) are static edges of the room and furniture, removed in nearly every frame. Faint, spread areas are removed only some of the time, where the performer moved. The colour scale is stretched (square root) so that rare removals stay visible.
+
+**Sample frame** — `occlusion/samples/sample_NN_frame_<index>.png`
+
+![Occlusion sample frame](docs/assets/occlusion/sample_example.png)
+
+> One analysed frame in three panels. 1: the depth map (distance of every pixel). 2: the confidence map (the sensor's own reliability score). 3: the result of the gate, with removed pixels in red. The bottom row zooms 4× into the region where the most pixels changed in this frame, ignoring static edges. The title gives the share of pixels removed in this frame.
 
 **Output: `occlusion_stage1_report.json`**
 
@@ -638,76 +630,13 @@ The removed pixels concentrate on silhouette edges, in the gaps between the arms
 }
 ```
 
-> The `summary` values are those of the dataset_01 run; the `samples` and `per_frame` entries show the field layout only. `pct_rejected_of_previously_valid_pixels` is the number of pixels removed by the gate divided by the number of pixels with a non-zero depth in the extracted dataset. `motion_energy_mm` is `null` for the first frames of the range, where there is no earlier frame to compare against.
+> The `summary` values are those of the dataset_01 run; the `samples` and `per_frame` entries show the field layout only. `motion_energy_mm` is `null` for the first frames of the range, where there is no earlier frame to compare against.
 
----
+### 6.2 Limits
 
-### 6.2 Online Implementation: `zed_ndi_streamer.py`
-
-The streamer sets `RuntimeParameters.confidence_threshold` on the ZED SDK, which removes the unreliable pixels during grab (they arrive as NaN), then fills them and publishes the result.
-
-**Why the fill is needed.** Writing a removed pixel as "far" tells the compositor to show CG at that pixel. At the silhouette this places a ring of CG on the performer, which is more visible than the error the gate removes. Each removed pixel is therefore replaced by the closest valid depth within `--fill-radius` pixels. Only removed pixels are modified, and pixels without a valid neighbour in range stay "far". Showing the real plate where CG should have been visible in a narrow gap is a smaller visual error than showing CG on the performer.
-
-```
-python3 zed_ndi_streamer.py [--confidence 50] [--fill-radius 4] [--bypass]
-```
-
-| Option | Default | Meaning |
-|---|---|---|
-| `--confidence` | 50 | Confidence threshold applied by the ZED SDK (SDK default is 95) |
-| `--fill-radius` | 4 | Fill reach in pixels. `0` disables the fill |
-| `--bypass` | off | Start with the original behaviour (SDK default confidence, no fill) |
-
-**Console commands** (type the command in the streamer terminal and press Enter):
-
-| Command | Effect |
-|---|---|
-| `b` | Toggle bypass for an A/B comparison on the live image |
-| `c <0-100>` | Change the confidence threshold while running |
-| `f <0-25>` | Change the fill radius while running |
-| `h` | Print the command list |
-
-**Timing log.** Every 5 seconds the streamer prints the frame rate, the mean and maximum time of capture, processing and sending, the share of pixels without data and the share of pixels filled:
-
-```
-[TIMING] REFINED fps= 29.9 | grab+retrieve  24.1/ 31.0 ms | process   6.2/  9.8 ms | send   4.0/  6.1 ms | no-data  0.62% | filled  0.51%
-```
-
-> The values above illustrate the format. The `process` column is the cost added by the refinement and the packing. Compare it against the 33 ms frame budget at 30 fps on the Jetson.
-
-OpenCV (`cv2`) is used for the fill when it is installed. Without it a NumPy implementation produces the same result at a higher cost.
-
-**`ZEDLiveLinkConfig.json`.** No change is needed for occlusion. The `confidence` entry under `BodyTrackingParameters` is the body detection confidence and is unrelated to the depth confidence threshold. The LiveLink sender receives the SDK stream and computes its own depth for body tracking, so the streamer's threshold affects only the NDI depth output.
-
----
-
-### 6.3 Unreal Engine Side: `M_DepthOcclusionComposite`
-
-The material normalises the CG depth to the same 0.5 m to 6.0 m range as the ZED depth and then evaluates:
-
-| Node | Operation |
-|---|---|
-| `Depth Diff — positive means CG is closer` | ZED depth minus CG depth (both normalised) |
-| Add with `DepthBias` | Adds the bias to the difference |
-| `Is CG Closer` | 1 when the sum is greater than 0, otherwise 0 |
-| `CG Exists` | 1 where CG depth is below the far plane, otherwise 0 |
-| `Final Composite` (Lerp) | A = Sony RGB, B = CG colour, Alpha = `Is CG Closer` × `CG Exists` |
-
-Two consequences follow from this graph:
-
-- A ZED value of far (1.0) always lets CG show wherever CG exists. A removed pixel written as far therefore shows CG (see 6.2).
-- `DepthBias` favours CG. One unit of normalised depth is 550 cm, so the current value of 0.075 corresponds to about 41 cm. CG up to about 41 cm behind the real surface still shows. Lower values hide CG sooner, but the 8-bit depth has a step of about 2.16 cm (one quantisation level), so a bias below roughly 0.01 (about 5 cm) may flicker where CG touches a real surface. This is to be confirmed with the procedure below.
-
-**Procedure for choosing `DepthBias`.** Test each value (for example 0.075, 0.03, 0.01, 0.0) with two scenes: (1) a CG object 20 to 40 cm behind the performer's hand, which shows whether CG still shows through, and (2) a CG object resting on the floor or touching a wall, which shows whether the CG edge flickers. Record the lowest value that passes both.
-
-**Evaluation record** (to be filled in after the rig tests):
-
-| Measurement | Bypass | Refined |
-|---|---|---|
-| Lowest stable `DepthBias` | | |
-| Visible show-through behind the hand (yes / no) | | |
-| Silhouette halo (yes / no) | | |
-| Added processing time per frame (ms) | not applicable | |
+- The removal rate is a **proxy**: it shows that the gate targets the right pixels, not how often the live composite is actually wrong, which needs the live system.
+- The edge refinement stages (median, matte, feathering, guided filtering) run only in Unreal Engine. Offline versions would need frame-accurate depth for every Sony frame, so they are tuned on the rig.
+- **Disocclusion:** next to every foreground object there is a strip the Sony sees and the ZED cannot (the ZED sits about 13 cm from the Sony). The reprojection fills it with the background depth, which is correct for the background but cannot recover detail inside the strip.
 
 ---
 
@@ -715,43 +644,77 @@ Two consequences follow from this graph:
 
 | Repository | Role |
 |---|---|
-| [`VP_AR_full_System`](https://github.com/Muhannad7794/VP_AR_full_System) | This repository. Offline pipeline: temporal alignment, spatial calibration, kinematic extraction and filtering. |
-| [`VP_AR_full_System_runtime`](https://github.com/Muhannad7794/VP_AR_full_System_runtime) | UE5 C++ runtime: camera tracking, compositing, occlusion, EI descriptor components, Niagara, mode switching. |
-| [`vp_baseFree_tracking`](https://github.com/Muhannad7794/vp_baseFree_tracking) | Adaptive smoothing analysis pipeline for camera tracking. Analysis and modelling of sigma-based interpolation models. |
+| [`VP_AR_full_System`](https://github.com/Muhannad7794/VP_AR_full_System) | This repository. Offline pipeline: extraction, temporal and spatial alignment, kinematics, occlusion validation. |
+| [`VP_AR_full_System_runtime`](https://github.com/Muhannad7794/VP_AR_full_System_runtime) | UE5 runtime: camera tracking, compositing, occlusion, EI descriptor components, Niagara, mode switching. |
+| [`vp_baseFree_tracking`](https://github.com/Muhannad7794/vp_baseFree_tracking) | Adaptive smoothing analysis pipeline for camera tracking. |
+
+---
 
 ## Output Reference
 
 | Path | Contents |
-| --- | --- |
-| `data/extracted/<dataset>/sony_rgb/` | All raw Sony frames extracted from the MP4 |
-| `data/extracted/<dataset>/zed_rgb/` | All raw ZED left-eye frames extracted from the SVO2 |
-| `data/extracted/<dataset>/zed_depth/` | All raw 16-bit ZED depth maps |
-| `data/extracted/<dataset>/zed_confidence/` | All raw 8-bit ZED confidence maps |
-| `data/json_output/<dataset>/frame_mapping.json` | Temporal alignment mapping based on similarity algorithm and DTW |
-| `data/json_output/<dataset>/smoothed_frame_mapping.json` | Median-filtered mapping |
-| `data/plots/<dataset>/drift_comparison.jpg` | Raw vs. smoothed temporal drift graph |
-| `data/synced/<dataset>/sony_rgb/` | Temporally aligned Sony frames |
-| `data/synced/<dataset>/zed_rgb/` | Temporally aligned ZED frames |
-| `data/synced/<dataset>/zed_depth/` | Temporally aligned depth maps |
-| `data/synced/<dataset>/zed_confidence/` | Temporally aligned confidence maps |
-| `data/inspected/<dataset>/sony_rgb/` | Sony frames that passed the ChArUco detection threshold |
-| `data/inspected/<dataset>/zed_rgb/` | ZED frames that passed the ChArUco detection threshold |
-| `data/plots/<dataset>/spatial/detection_check/` | Annotated frames with detected corners and counts |
-| `data/plots/<dataset>/spatial/picked_for_alignment/` | Annotated frames that passed both detection and motion filters |
-| `data/picked_for_alignment/<dataset>/sony_rgb/` | Manually curated Sony calibration frames |
-| `data/picked_for_alignment/<dataset>/zed_rgb/` | Matching manually curated ZED calibration frames |
-| `data/json_output/<dataset>/spatial_calibration.json` | Intrinsics, extrinsics, and UE5 offsets |
-| `data/json_output/<dataset>/detection_summary.json` | Per-frame ChArUco detection counts |
-| `data/json_output/<dataset>/validation_report.json` | Per-frame reprojection error analysis |
-| `data/plots/<dataset>/spatial/reprojection_error_analysis.png` | Error distribution and per-frame bar chart |
-| `data/plots/<dataset>/spatial/corner_coverage_sony_rgb.png` | Sony corner detection density map |
-| `data/plots/<dataset>/spatial/corner_coverage_zed_rgb.png` | ZED corner detection density map |
-| `data/plots/<dataset>/spatial/detection_check/` | Annotated frames from inspect_detections.py |
-| `data/plots/<dataset>/spatial/diagnosis/` | Diagnostic output from diagnose_detection.py |
+|---|---|
+| **Extraction** | |
+| `data/extracted/<dataset>/sony_rgb/` | Sony frames |
+| `data/extracted/<dataset>/zed_rgb/` | Rectified ZED left images |
+| `data/extracted/<dataset>/zed_depth/` | 16-bit ZED depth maps, millimetres, 0 = no depth |
+| `data/extracted/<dataset>/zed_confidence/` | 8-bit ZED confidence maps, 1 (reliable) to 100 |
+| `data/extracted/<dataset>/zed_frames.csv`, `sony_frames.csv` | Per-frame timestamps, luma and motion |
+| `data/extracted/<dataset>/extraction_info.json` | Extraction summary and recorder-log comparison |
+| `data/json_output/<dataset>/zed_intrinsics_extraction.json` | Rectified ZED intrinsics of the extraction session |
+| **Temporal alignment** | |
+| `data/json_output/<dataset>/frame_mapping.json` | Sony frame → ZED frame, active window |
+| `data/json_output/<dataset>/frame_mapping_full.json` | The same for the whole overlap |
+| `data/json_output/<dataset>/frame_mapping_detail.csv` | Times, matched frame, residual and flags per Sony frame |
+| `data/json_output/<dataset>/sync_report.json` | Offsets, cover events, drift check, decisions |
+| `data/json_output/<dataset>/smoothed_frame_mapping.json` | Median-filtered mapping (the one compiled) |
+| `data/txt_output/<dataset>/mapping_comparison.txt` | Frames changed by the smoothing |
+| `data/plots/<dataset>/sync/` | `sync_luma.png`, `sync_correlation.png`, `sync_drift.png`, `sync_residuals.png` |
+| `data/plots/<dataset>/drift_comparison.jpg` | Frame offset over the recording, raw and smoothed |
+| `data/synced/<dataset>/` | `sony_rgb/`, `zed_rgb/`, `zed_depth/`, `zed_confidence/`, `synced_index.csv` |
+| **Spatial alignment** | |
+| `data/json_output/<dataset>/zed_intrinsics.json` | ZED rectified intrinsics used by the calibration |
+| `data/json_output/<dataset>/detections.json.gz` | Board detections, usability and stillness for every frame |
+| `data/json_output/<dataset>/detection_summary.json` | Detection counts |
+| `data/json_output/<dataset>/sony_intrinsics.json` | Sony lens models, held-out errors, selected model |
+| `data/json_output/<dataset>/pair_selection.json` | Calibration and held-out pairs with pose features |
+| `data/json_output/<dataset>/spatial_calibration.json` | Extrinsics, uncertainty, Unreal Engine values, board used |
+| `data/json_output/<dataset>/validation_report.json` | Held-out, distance-resolved and end-to-end errors, checks, grade |
+| `data/picked_for_alignment/<dataset>/`, `data/picked_for_validation/<dataset>/` | Copies of the selected calibration and held-out frames |
+| `data/plots/<dataset>/spatial/` | `detection_timeline.png`, `sony_intrinsics_models.png`, `sony_intrinsics_coverage.png`, `sony_runtime_displacement.png`, `pair_selection_features.png`, `reprojection_error_analysis.png`, `error_vs_distance.png`, `bias_vs_inverse_distance.png`, `depth_scale_check.png`, `error_across_sony_frame.png`, `corner_coverage_sony_rgb.png`, `corner_coverage_zed_rgb.png` |
+| **Kinematics** | |
 | `data/extracted/<dataset>/kinematics/raw_skeleton_data.csv` | Raw 38-joint 3D coordinates (mm) per tracked frame |
-| `data/plots/<dataset>/kinematics/1Euro_noise_reduction_{joint}_{axis}.png` | Raw vs. 1 Euro filtered coordinate signal for target joint |
-| `data/plots/<dataset>/kinematics/lma_expansiveness.png` | LMA Kinesphere Expansiveness metric over time |
-| `data/json_output/<dataset>/occlusion_stage1_report.json` | Stage 1 confidence gating statistics, per-frame rejection rates and selected samples |
-| `data/plots/<dataset>/occlusion/confidence_gating_rejection_rate.png` | Share of valid depth pixels removed by the gate over time, with the scene motion trace |
-| `data/plots/<dataset>/occlusion/rejection_frequency_map.png` | Per-pixel frequency of removal across the analysed range |
-| `data/plots/<dataset>/occlusion/samples/` | Sample frames selected by scene motion, showing depth before and after the gate |
+| `data/plots/<dataset>/kinematics/` | `1Euro_noise_reduction_{joint}_{axis}.png`, `lma_expansiveness.png` |
+| **Occlusion refinement** | |
+| `data/json_output/<dataset>/occlusion_stage1_report.json` | Gating statistics, per-frame rates, selected samples |
+| `data/plots/<dataset>/occlusion/` | `confidence_gating_rejection_rate.png`, `rejection_frequency_map.png`, `samples/` |
+
+### README figures
+
+`data/` is not tracked by Git, so the figures shown above are copies in `docs/assets/`. After a new run, refresh them with:
+
+```bash
+./collect_readme_assets.sh [spatial and temporal dataset] [kinematics dataset] [occlusion dataset]
+# default: ./collect_readme_assets.sh dataset_05 dataset_01 dataset_01
+```
+
+---
+
+## Directory Structure
+
+See [`directory_structure.txt`](directory_structure.txt) for the annotated tree. In short:
+
+```
+VP_AR_full_System/
+├── data/                     # Not tracked: raw recordings and every output
+├── docs/                     # Project page and the README figures (docs/assets/)
+├── temporal_alignment/       # Phase 2 (and check_svo.py)
+├── spatial_alignment/        # Phase 3
+├── skeleton_filtering/       # Phase 4
+├── occlusion_refinement/     # Phase 6
+├── extract_frames.py         # Phase 1
+├── run_extract.sh  run_temporal.sh  run_spatial.sh  run_filtering.sh  run_occlusion.sh
+├── collect_readme_assets.sh
+├── docker-compose.yml  Dockerfile  requirements.txt
+└── README.md  directory_structure.txt
+```
